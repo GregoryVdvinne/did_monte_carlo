@@ -162,7 +162,7 @@ Now, let us consider a case in which the effects of the treatment are heterogene
 myData2 <- myData %>% 
   mutate(revenue = rnorm(1, mean = 1000000, sd =100000) +
            50000*urban +
-           #treatment effect dependent on covariate
+           #treatment effect dependent on year
            case_when(
              year == 2019 ~ 0,
              year == 2020 ~ treated*150000,
@@ -182,12 +182,41 @@ output <- event_study(
 ) %>%
   filter(estimator %in% c("TWFE", "Gardner (2021)", "Callaway and Sant'Anna (2020)"))
 
-#Plote the results
+#Plot the results
 plot_event_study(output) 
 
+
+myData2 <- myData %>% 
+  mutate(revenue = rnorm(1, mean = 1000000, sd =100000) +
+           50000*urban +
+           #treatment effect dependent on group
+           case_when(
+             g == 0 ~ 0,
+             g == 2020 ~ treated*150000,
+             g == 2021 ~ treated*150000,
+             g == 2022 ~ treated*50000,
+             g == 2023 ~ treated*50000)
+         )
+         
+           
+           
+
+#Without conditioning on covariates
+output <- event_study(
+  yname = "revenue",  
+  tname = "year",       
+  idname = "id",        
+  gname = "g",      
+  data = myData2
+) %>%
+  filter(estimator %in% c("TWFE", "Gardner (2021)", "Callaway and Sant'Anna (2020)"))
+
+#Plot the results
+plot_event_study(output) 
 ```
 
 ### Covariates with Constant Effects
+
 
 #### Economic Shock
 
