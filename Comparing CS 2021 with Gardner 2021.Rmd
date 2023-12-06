@@ -1,0 +1,203 @@
+---
+title: "Exploring Modern Difference-in-Differences Techniques with A Monte Carlo Simulation"
+author: "Gregory Vander Vinne"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_float: false
+---
+
+```{r setup, include=TRUE, message=FALSE, warning=FALSE}
+#Clear memory
+rm(list = ls(all=T))
+
+
+#Load packages
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(
+  
+  tidyverse, # Grammar for data + ggplot2
+  did,       # Callaway and Sant'Anna
+  did2s,     # Gardner
+  knitr      # Print pretty tables
+  
+)
+
+#Set some output options
+knitr::opts_chunk$set(warning = FALSE, message = FALSE, fig.width = 10, fig.height = 7)
+```
+
+## Introduction
+
+In my day job, I do a fair bit of work in the realm of causal inference. Typically, this involves looking at whether a particular policy resulted in improved outcomes for individuals. There are many different ways of doing this. One of the most common methods, or groups of methods, is difference-in-differences (DiD). DiD methods have been advancing rapidly in recent years following the discovery of a number of issues with two-way fixed effects (see Borusyak and Jaravel (2018), Sun and Abraham (2021), de Chaisemartin and D'Haultfoeuille (2020), and Goodman-Bacon (2021)).
+
+Recently I have been exploring how different variations of difference-in-differences estimators that allow for staggered adoption behave under different circumstances. The {did2s} and {did} packages in R make this relatively easy to do with Monte Carlo simulations. While I have explored other estimators as well, in this post I wish to focus on two in particular. These two are the estimators proposed in Gardner (2021), and Callaway and Sant'Anna (2021). I will not be providing any proofs or getting into any of the math behind how these to methods work. Rather, I will be illustrating with a Monte Carlo simulations, how these different estimators behave (or misbehave) given different types of treatment effects and covariates. 
+
+## A Hypothetical Scenario
+
+I find simulation-based explanations easier to follow when they are explained in terms of a hypothetical real world scenario and we give the variables realistic values and names. For this simulation, let us imagine that a large company with many locations wants to measure whether adoption of a particular technology improves sales. Some of this company's locations have adopted the technology, while others have not. Furthermore, the locations that have adopted the technology have adopted it at different times and have chosen to adopt it of their own volition, which means that the treatment is not randomly assigned. Let us explore how we might measure the effects of the technology on sales using the methods of Callaway and Sant'Anna (2021) hereafter referred to as CS, Gardner (2021), hereafter referred to as Gardner, and TWFE.
+
+### Homogeneous Treatment and Covariates with Fixed Effects
+
+``` {r set parameters}
+#Set number of units and periods
+n.units <- 1000
+n.periods <- 5
+
+```
+
+To begin, we have a balanced panel consisting of `r n.periods` periods (years) and `r n.units` units (store locations). Approximately 50%  of stores have not adopted the technology (i.e., they are untreated), while they other 50% have adopted the technology (i.e., they are treated at some point). Among these stores, approximately 1/4 adopted the technology in each of the last four years of our panel. In the first year, none of the stores have adopted the technology yet. For now, we will say that stores are treated in the first year that they adopt the technology and remain treated in all subsequent years. Additionally, there is one covariate, which is a dummy variable that indicates whether a store is located in an urban area or not. Approximately half of stores are in urban areas. Stores located in urban areas are twice as likely to adopt the technology as stores in non-urban areas; approximately 2/3 stores in urban areas adopt the technology, while 1/3 of stores in non-urban areas do. 
+
+Lastly, we have revenue, which is determined as follows. For each store, revenue in each year is drawn from a random normal distribution with a mean of 1 000 000 and a standard deviation of 100 000, plus the effects of being located in an urban area and adopting the technology. The ceteris paribus effect of being located in an urban area is an additional 50 000 per year of revenue, while the ceteris paribus effect of the treatment is an additional 100 000 per year of income. This effect is completely homogeneous. 
+
+```{r Generate Data, echo=TRUE}
+
+#First column
+myData <- as.data.frame(rep(1:n.units, n.periods))
+colnames(myData) <- "id"
+
+#For reproducibility
+set.seed(97)
+#Add other columns
+myData <- myData %>%
+  arrange(by=id) %>% 
+  cbind(year = rep(2019:(2019+n.periods-1),n.units)) %>% #Add periods
+  group_by(id) %>%
+  mutate(g = sample(c((2020:(2019+n.periods-1)), rep(0,5)),1), # Assign to treatment groups
+         urban = case_when(g==0 ~ sample(c(0,0,1),1),
+                           TRUE ~ sample(c(0,1,1),1)) # Urban locations twice as likely to be treated
+  ) %>%
+  rowwise() %>%
+  mutate(treated = case_when(g<=year & g!=0 ~ 1,
+                             TRUE ~ 0),
+         revenue = (rnorm(1, mean = 1000000, sd =100000) + #Average revenue of 1M plus...
+           50000*urban + # additional 100k if in urban area
+           100000*treated # treatment effect: 100k 
+           ) 
+         ) 
+```
+
+Now, to ensure that the reader has a good comprehension of the simulated data set, I provide a few tables to provide some insight into the data. The first table shows what the data set looks like for one treated and one untreated store. 
+
+```{r A Glimpse of the Data, echo=TRUE}
+#Filter down to the five observations for one treated individual
+myData %>% 
+  ungroup() %>%
+  filter(g==0, urban == 0)%>%
+  slice_head(n=5) %>%
+  #Stack on top of five obs for one untreated individual
+  rbind(
+    #Filter down to the five observations for one individual treated in 2017
+    myData %>%
+      ungroup() %>%
+      filter(g==2021, urban==1)%>%
+      slice_head(n=5)
+  ) %>%
+  mutate(revenue = scales::dollar(revenue)) %>%
+  #Print as a table
+  kable(
+    align = "l",
+    caption = "Data for One Store That Adopts the Technology and One that Does Not",
+    col.names = c("ID","Year","Treatment Group","Urban Dummy","Treated Yet", "Revenue")
+  )
+```
+
+The table below shows mean revenue by treatment status and whether a store is located in an urban area. 
+
+``` {r Revenue by Treatment and Urban, echo = TRUE}
+myData %>%
+  group_by(treated, urban) %>%
+  summarise(Revenue = mean(revenue) %>% scales::dollar()) %>%
+  kable(
+    align = "l",
+    caption = "Mean Revenue by Treatment Status and Whether Stores are Urban",
+    col.names = c("Treated","Urban Dummy", "Mean Revenue")
+  )
+
+
+```
+
+Finally, this table shows the number of units with each treatment group / urban dummy combination.
+
+
+``` {r Count by Treatment Group and Urban, echo = TRUE}
+myData %>%
+  group_by(g, urban) %>%
+  summarise(Count = n()) %>%
+  kable(
+    align = "l",
+    caption = "In Each Treatment Group by Urban Dummy ",
+    col.names = c("Treatment Group", "Urban Dummy", "Count")
+  )
+
+```
+
+Now that the housekeeping is out of the way let's look at how the different estimators perform in this scenario. The {did2s} package makes it very easy for us to compare the results. As can be seen from the results below, the three methods all provide similar, unbiased estimates of the effect of the treatment. Note that we have not explicitly controlled for or conditioned on the the urban covaraite in within any of the three methods this. In the cases of TWFE and Gardner (2021), the fixed effects will deal with the covariate in this case, and in CS, the 'differencing' will deal with it. This is because although the covariate effects the **level** of the outcome variable, it does not effect the **dynamics** of the outcome variable - it has the same value and same effect in all periods.    
+
+``` {r Estimates For Scenario 1, echo = TRUE}
+#Without conditioning on covariates
+output <- event_study(
+  yname = "revenue",  
+  tname = "year",       
+  idname = "id",        
+  gname = "g",      
+  data = myData
+) %>%
+  filter(estimator %in% c("TWFE", "Gardner (2021)", "Callaway and Sant'Anna (2020)"))
+
+#Plote the results
+plot_event_study(output) 
+
+
+```
+
+### Heterogeneous Treatment Effects
+
+Now, let us consider a case in which the effects of the treatment are heterogeneous. That is, the effects are not the same for all units and periods. We will make it so that the treatment effect is +150 000 in revenue for in 2020 and 2021, but only +50,000 in revenue in th years 2022 and 2023. 
+
+``` {r Estimates For Scenario 2, echo = TRUE}
+
+myData2 <- myData %>% 
+  mutate(revenue = rnorm(1, mean = 1000000, sd =100000) +
+           50000*urban +
+           #treatment effect dependent on covariate
+           case_when(
+             year == 2019 ~ 0,
+             year == 2020 ~ treated*150000,
+             year == 2021 ~ treated*150000,
+             year == 2022 ~ treated*50000,
+             year == 2023 ~ treated*50000
+           )
+         ) 
+
+#Without conditioning on covariates
+output <- event_study(
+  yname = "revenue",  
+  tname = "year",       
+  idname = "id",        
+  gname = "g",      
+  data = myData2
+) %>%
+  filter(estimator %in% c("TWFE", "Gardner (2021)", "Callaway and Sant'Anna (2020)"))
+
+#Plote the results
+plot_event_study(output) 
+
+```
+
+### Covariates with Constant Effects
+
+#### Economic Shock
+
+
+### Covariates with Dynamic Effects
+
+
+### Covariates with Changing Values
+
+
+### Treatment that 'Switches Off'
+
+
