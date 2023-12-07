@@ -18,10 +18,11 @@ rm(list = ls(all=T))
 if (!require("pacman")) install.packages("pacman")
 pacman::p_load(
   
-  tidyverse, # Grammar for data + ggplot2
-  did,       # Callaway and Sant'Anna
-  did2s,     # Gardner
-  knitr      # Print pretty tables
+  tidyverse,  # Grammar for data + ggplot2
+  did,        # Callaway and Sant'Anna
+  did2s,      # Gardner
+  data.table, # data tables
+  knitr       # Print pretty tables
   
 )
 
@@ -43,7 +44,7 @@ I find simulation-based explanations easier to follow when they are explained in
 
 ``` {r set parameters}
 #Set number of units and periods
-n.units <- 1000
+n.units <- 5000
 n.periods <- 5
 
 ```
@@ -65,7 +66,13 @@ myData <- myData %>%
   arrange(by=id) %>% 
   cbind(year = rep(2019:(2019+n.periods-1),n.units)) %>% #Add periods
   group_by(id) %>%
-  mutate(g = sample(c((2020:(2019+n.periods-1)), rep(0,5)),1), # Assign to treatment groups
+  mutate(g = case_when(
+    id %in% (1:n.units/2) ~ 0, #50% untreated
+    id %in% ((n.units/2+1):(n.units/2+n.units/(n.periods-1)/2)) ~ 2020,
+    id %in% ((n.units/2+n.units/(n.periods-1)/2+1):(n.units/2+n.units*2/(n.periods-1)/2)) ~ 2021,
+    id %in% ((n.units/2+n.units*2/(n.periods-1)/2+1):(n.units/2+n.units*3/(n.periods-1)/2)) ~ 2022,
+    TRUE ~ 2023
+  ), # Assign to treatment groups
          urban = case_when(g==0 ~ sample(c(0,0,1),1),
                            TRUE ~ sample(c(0,1,1),1)) # Urban locations twice as likely to be treated
   ) %>%
@@ -134,7 +141,7 @@ myData %>%
 
 ```
 
-Now that the housekeeping is out of the way let's look at how the different estimators perform in this scenario. The {did2s} package makes it very easy for us to compare the results. As can be seen from the results below, the three methods all provide similar, unbiased estimates of the effect of the treatment. Note that we have not explicitly controlled for or conditioned on the the urban covaraite in within any of the three methods this. In the cases of TWFE and Gardner (2021), the fixed effects will deal with the covariate in this case, and in CS, the 'differencing' will deal with it. This is because although the covariate effects the **level** of the outcome variable, it does not effect the **dynamics** of the outcome variable - it has the same value and same effect in all periods.    
+Now that the housekeeping is out of the way let's look at how the different estimators perform in this scenario. The {did2s} package makes it very easy for us to compare the results. As can be seen from the results below, the three methods all provide similar, unbiased estimates of the effect of the treatment. Note that we have not explicitly controlled for or conditioned on the the urban covaraite in within any of the three methods this. In the cases of TWFE and Gardner (2021), the unit-level fixed effects will deal with the covariate in this case, and in CS, the 'differencing' will deal with it. This is because although the covariate effects the **level** of the outcome variable, it does not effect the **dynamics** of the outcome variable - it has the same value and same effect in all periods.    
 
 ``` {r Estimates For Scenario 1, echo = TRUE}
 #Without conditioning on covariates
@@ -147,7 +154,7 @@ output <- event_study(
 ) %>%
   filter(estimator %in% c("TWFE", "Gardner (2021)", "Callaway and Sant'Anna (2020)"))
 
-#Plote the results
+#Plot the results
 plot_event_study(output) 
 
 
@@ -155,9 +162,29 @@ plot_event_study(output)
 
 ### Heterogeneous Treatment Effects
 
-Now, let us consider a case in which the effects of the treatment are heterogeneous. That is, the effects are not the same for all units and periods. We will make it so that the treatment effect is +150 000 in revenue for in 2020 and 2021, but only +50,000 in revenue in th years 2022 and 2023. 
+``` {r Effect Parameters}
+#Effect that treatment has in each year
+e_20 <- 50000
+e_21 <- 100000
+e_22 <- 150000
+e_23 <- 200000
+
+
+```
+
+Now, let us consider a case in which the effects of the treatment are heterogeneous. That is, the effects are not the same for all groups and periods. We will make it so that the treatment effect is +`r e_20` in revenue in 2020, `r e_21` 2021, `r e_22` in 2022 and `r e_23` in 2023. Perhaps this steady increase in the benefit from the technology arises from some sort of network  effect -  as more people/firms/locations adopt the technology, it becomes more effective. Note that it does not become more effect because units have been in the 'treated' state for more years. It becomes more effective as more calendar years pass, regardless of how long a given unit has been treated.
 
 ``` {r Estimates For Scenario 2, echo = TRUE}
+
+true_effect <- data.table(
+  term = -4:3,
+  true_effect = c(rep(0,4),
+               (e_20+e_21+e_22+e_23)/4,
+               (e_21+e_22+e_23)/3,
+               (e_22+e_23)/2,
+               e_23)
+)
+
 
 myData2 <- myData %>% 
   mutate(revenue = rnorm(1, mean = 1000000, sd =100000) +
@@ -165,10 +192,10 @@ myData2 <- myData %>%
            #treatment effect dependent on year
            case_when(
              year == 2019 ~ 0,
-             year == 2020 ~ treated*150000,
-             year == 2021 ~ treated*150000,
-             year == 2022 ~ treated*50000,
-             year == 2023 ~ treated*50000
+             year == 2020 ~ treated*e_20,
+             year == 2021 ~ treated*e_21,
+             year == 2022 ~ treated*e_22,
+             year == 2023 ~ treated*e_23
            )
          ) 
 
@@ -182,46 +209,35 @@ output <- event_study(
 ) %>%
   filter(estimator %in% c("TWFE", "Gardner (2021)", "Callaway and Sant'Anna (2020)"))
 
-#Plot the results
-plot_event_study(output) 
-
-
-myData2 <- myData %>% 
-  mutate(revenue = rnorm(1, mean = 1000000, sd =100000) +
-           50000*urban +
-           #treatment effect dependent on group
-           case_when(
-             g == 0 ~ 0,
-             g == 2020 ~ treated*150000,
-             g == 2021 ~ treated*150000,
-             g == 2022 ~ treated*50000,
-             g == 2023 ~ treated*50000)
-         )
-         
-           
-           
-
-#Without conditioning on covariates
-output <- event_study(
-  yname = "revenue",  
-  tname = "year",       
-  idname = "id",        
-  gname = "g",      
-  data = myData2
-) %>%
-  filter(estimator %in% c("TWFE", "Gardner (2021)", "Callaway and Sant'Anna (2020)"))
+output <- left_join(output, true_effect, by = "term")
 
 #Plot the results
-plot_event_study(output) 
+plot_event_study(output) + 
+  geom_line(aes(x = term, y=true_effect), color = "red")
+
+
+
 ```
 
-### Covariates with Constant Effects
-
-
-#### Economic Shock
+#### Economic Shock?
 
 
 ### Covariates with Dynamic Effects
+
+Let us return to a situation in which the effects of treatment are not heterogeneous. As in the first simulation, we will say that adopting the technology has the effect of increasing revenues by 100,000 per year in all years. However, we will introduce a covariate that does not have the same effect in all periods. Let's imagine that this is a Canadian company with approximately half of its locations in Canada and half in the USA. Initially, in 2019, there is a benefit to being located in Canada, perhaps because of better brand awareness. In 2019, being located in Canada has the effect of boosting revenues by 50 000, holding all else equal. However, as time goes on, the brand grows in popularity in the USA, perhaps competitors in the USA start closing down, or the brand just becomes more of a fad in the USA than in Canada. As a result, in 2020, beinging located in the united states has no benefit, while in 2021 onwards, being located in the United States has the effect of **increasing** revenues by 50 000. Furthermore, Canadian locations are less likely to adopt the technology than American locations, meaning that treatment is correlated with this variable. We will say that American locations are three times as likely to adopt the treatment as Canadian locations. 
+
+Therefore, although the value of this covariate is constant over time, its effect is not constant. Rather than merely affecting the **level** of the outcome variable, this covariate affects the **dynamics** of the outcome variable. First, let us compute the three different estimators that we have been discussing, without explicitly controlling for or conditioning on this new covariate in any of them.  
+
+``` {r Estimates For Scenario 2, echo = TRUE}
+myData <- myData %>%
+  mutate()
+
+
+
+
+```
+
+
 
 
 ### Covariates with Changing Values
