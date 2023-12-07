@@ -34,14 +34,32 @@ knitr::opts_chunk$set(include = TRUE, warning = FALSE, message = FALSE,
 
 ```{r User-Defined Functions}
 
-my_event_study <- function(estimator) {
-  event_study(
-  yname = "revenue",  
-  tname = "year",       
-  idname = "id",        
-  gname = "g",
-  estimator = estimator,
-  data = myData
+my_event_study <- function(data) {
+  rbind(
+    event_study(
+      yname = "revenue",  
+      tname = "year",       
+      idname = "id",        
+      gname = "g",
+      estimator = "TWFE",
+      data = data
+      ),
+    event_study(
+      yname = "revenue",  
+      tname = "year",       
+      idname = "id",        
+      gname = "g",
+      estimator = "did2s",
+      data =data
+      ),
+    event_study(
+      yname = "revenue",  
+      tname = "year",       
+      idname = "id",        
+      gname = "g",
+      estimator = "did",
+      data = data
+      )
   )
 }
 
@@ -84,20 +102,20 @@ myData <- myData %>%
   arrange(by=id) %>% 
   cbind(year = rep(2019:(2019+n.periods-1),n.units)) %>% #Add periods
   group_by(id) %>%
-  mutate(g = case_when(
+  mutate(g = case_when(        #Assign to treatment groups
     id %in% (1:n.units/2) ~ 0, #50% untreated
     id %in% ((n.units/2+1):(n.units/2+n.units/(n.periods-1)/2)) ~ 2020,
     id %in% ((n.units/2+n.units/(n.periods-1)/2+1):(n.units/2+n.units*2/(n.periods-1)/2)) ~ 2021,
     id %in% ((n.units/2+n.units*2/(n.periods-1)/2+1):(n.units/2+n.units*3/(n.periods-1)/2)) ~ 2022,
     TRUE ~ 2023
-  ), # Assign to treatment groups
+  ), 
          urban = case_when(g==0 ~ sample(c(0,0,1),1),
                            TRUE ~ sample(c(0,1,1),1)) # Urban locations twice as likely to be treated
   ) %>%
   rowwise() %>%
   mutate(treated = case_when(g<=year & g!=0 ~ 1,
                              TRUE ~ 0),
-         revenue = (rnorm(1, mean = 1000000, sd =100000) + #Average revenue of 1M plus...
+         revenue = (rnorm(1, mean = 1000000, sd =100000) + #Average revenue of 1M. Plus:
            50000*urban + # additional 100k if in urban area
            100000*treated # treatment effect: 100k 
            ) 
@@ -107,6 +125,8 @@ myData <- myData %>%
 Now, to ensure that the reader has a good comprehension of the simulated data set, I provide a few tables to provide some insight into the data. The first table shows what the data set looks like for one treated and one untreated store. 
 
 ```{r A Glimpse of the Data, echo=TRUE}
+
+## A glimpse of the data ##
 #Filter down to the five observations for one treated individual
 myData %>% 
   ungroup() %>%
@@ -153,7 +173,7 @@ myData %>%
   summarise(Count = n()) %>%
   kable(
     align = "l",
-    caption = "In Each Treatment Group by Urban Dummy ",
+    caption = "Unit-Period Observations in Each Treatment Group by Urban Dummy ",
     col.names = c("Treatment Group", "Urban Dummy", "Count")
   )
 
@@ -162,20 +182,8 @@ myData %>%
 Now that the housekeeping is out of the way let's look at how the different estimators perform in this scenario. The {did2s} package makes it very easy for us to compare the results. As can be seen from the results below, the three methods all provide similar, unbiased estimates of the effect of the treatment. Note that we have not explicitly controlled for or conditioned on the the urban covaraite in within any of the three methods this. In the cases of TWFE and Gardner (2021), the unit-level fixed effects will deal with the covariate in this case, and in CS, the 'differencing' will deal with it. This is because although the covariate effects the **level** of the outcome variable, it does not effect the **dynamics** of the outcome variable - it has the same value and same effect in all periods.    
 
 ``` {r Estimates For Scenario 1, echo = TRUE}
-
-output <- sapply(list("TWFE","did2s", "did"), 
-                 my_event_study)
-
-#Without conditioning on covariates
-output <- event_study(
-  yname = "revenue",  
-  tname = "year",       
-  idname = "id",        
-  gname = "g",
-  xformla = ~NULL,
-  data = myData
-) %>%
-  filter(estimator %in% c("TWFE", "Gardner (2021)", "Callaway and Sant'Anna (2020)"))
+#Run our three estimators
+output <- my_event_study(myData)
 
 #Plot the results
 plot_event_study(output) 
@@ -195,10 +203,10 @@ e_23 <- 200000
 
 ```
 
-Now, let us consider a case in which the effects of the treatment are heterogeneous. That is, the effects are not the same for all groups and periods. We will make it so that the treatment effect is +`r e_20` in revenue in 2020, `r e_21` 2021, `r e_22` in 2022 and `r e_23` in 2023. Perhaps this steady increase in the benefit from the technology arises from some sort of network  effect -  as more people/firms/locations adopt the technology, it becomes more effective. Note that it does not become more effect because units have been in the 'treated' state for more years. It becomes more effective as more calendar years pass, regardless of how long a given unit has been treated.
+Now, let us consider a case in which the effects of the treatment are heterogeneous. That is, the effects are not the same for all groups and periods. We will make it so that the treatment effect is +`r scales::dollar(e_20)` in revenue in 2020, `r scales::dollar(e_21)` 2021, `r scales::dollar(e_22)` in 2022 and `r scales::dollar(e_23)` in 2023. Perhaps this steady increase in the benefit from the technology arises from some sort of network  effect -  as more people/firms/locations adopt the technology, it becomes more effective. Note that it does not become more effect because units have been in the 'treated' state for more years. It becomes more effective as more calendar years pass, regardless of how long a given unit has been treated.
 
 ``` {r Estimates For Scenario 2, echo = TRUE}
-
+#Calculate true effect and save
 true_effect <- data.table(
   term = -4:3,
   true_effect = c(rep(0,4),
@@ -208,7 +216,7 @@ true_effect <- data.table(
                e_23)
 )
 
-
+#Add heterogeneous effects to data
 myData2 <- myData %>% 
   mutate(revenue = rnorm(1, mean = 1000000, sd =100000) +
            50000*urban +
@@ -222,23 +230,15 @@ myData2 <- myData %>%
            )
          ) 
 
-#Without conditioning on covariates
-output <- event_study(
-  yname = "revenue",  
-  tname = "year",       
-  idname = "id",        
-  gname = "g",      
-  data = myData2
-) %>%
-  filter(estimator %in% c("TWFE", "Gardner (2021)", "Callaway and Sant'Anna (2020)"))
+#Run our three estimators
+output <- my_event_study(myData2)
 
+#Add column for true effect to DF of estimates
 output <- left_join(output, true_effect, by = "term")
 
 #Plot the results
 plot_event_study(output) + 
   geom_line(aes(x = term, y=true_effect), color = "red")
-
-
 
 ```
 
@@ -247,18 +247,18 @@ plot_event_study(output) +
 
 ### Covariates with Dynamic Effects
 
-Let us return to a situation in which the effects of treatment are not heterogeneous. As in the first simulation, we will say that adopting the technology has the effect of increasing revenues by 100,000 per year in all years. However, we will introduce a covariate that does not have the same effect in all periods. Let's imagine that this is a Canadian company with approximately half of its locations in Canada and half in the USA. Initially, in 2019, there is a benefit to being located in Canada, perhaps because of better brand awareness. In 2019, being located in Canada has the effect of boosting revenues by 50 000, holding all else equal. However, as time goes on, the brand grows in popularity in the USA, perhaps competitors in the USA start closing down, or the brand just becomes more of a fad in the USA than in Canada. As a result, in 2020, beinging located in the united states has no benefit, while in 2021 onwards, being located in the United States has the effect of **increasing** revenues by 50 000. Furthermore, Canadian locations are less likely to adopt the technology than American locations, meaning that treatment is correlated with this variable. We will say that American locations are three times as likely to adopt the treatment as Canadian locations. 
+Let us return to a situation in which the effects of treatment are not heterogeneous. As in the first simulation, we will say that adopting the technology has the effect of increasing revenues by 100,000 per year in all years. However, we will introduce a covariate that does not have the same effect in all years. Let's imagine that this is a Canadian company with approximately half of its locations in Canada and half in the USA. Initially, in 2019, being located in the USA has a negative effect, perhaps due to inferior brand awareness. In 2019, being located in the USA has the effect of **reducing** revenues by 50 000, all else being equal. However, as time goes on, the brand grows in popularity in the USA, perhaps competitors in the USA start closing down, or the brand just becomes more of a fad in the USA than in Canada. As a result, in 2020, being located in the USA has neither a negative effect nor positive effect, while in 2021 onwards, being located in the United States has the effect of **boosting** revenues by 50 000. Furthermore, Canadian locations are less likely to adopt the technology than American locations, meaning that treatment is correlated with this variable. We will say that American locations are three times as likely to adopt the treatment as Canadian locations. 
 
 Therefore, although the value of this covariate is constant over time, its effect is not constant. Rather than merely affecting the **level** of the outcome variable, this covariate affects the **dynamics** of the outcome variable. First, let us compute the three different estimators that we have been discussing, without explicitly controlling for or conditioning on this new covariate in any of them.  
 
-``` {r Estimates For Scenario 2, echo = TRUE}
+``` {r Estimates For Scenario 3, echo = TRUE}
 
 #Add the covariate indicating whether location is in Canada
 myData <- myData %>%
   group_by(id) %>%
-  mutate(canada = case_when(
-    treated == 1 ~ sample(c(0,0,0,1),1),
-    treated == 0 ~ sample(c(0,1,1,1),1)
+  mutate(usa = case_when(
+    g == 0 ~ sample(c(0,0,0,1),1),
+    TRUE == 1 ~ sample(c(0,1,1,1),1)
     )
   ) %>%
   rowwise() %>%
@@ -266,9 +266,9 @@ myData <- myData %>%
            50000*urban +
            #Effect of canada covariate dependent on year
            case_when(
-             year == 2019 ~ canada*25000,
-             year == 2020 ~ canada*0,
-             TRUE ~ (1-canada)*50000
+             year == 2019 ~ usa*-50000,
+             year == 2020 ~ usa*0,
+             TRUE ~  usa*50000
            ) +
            100000*treated
   ) %>%
@@ -279,11 +279,28 @@ myData <- myData %>%
 #   group_by(year, canada, treated) %>%
 #   summarise(revenue = mean(revenue))
 
-  
+output <- my_event_study(myData)
 
+plot_event_study(output)
+
+
+#CS att gt 
+attgt <- att_gt(
+      yname = "revenue",  
+      tname = "year",       
+      idname = "id",        
+      gname = "g",
+      data = myData
+)
+
+ggdid(attgt) 
+ 
 ```
 
 
+Alas, all three estimators produce biased estimates for the effect of the technology. In the language of difference-in-differences, this is because the parallel trends assumption does not hold. The 'gap' in revenues between the treatment group and the control group would not have stayed constant in the 'post' periods if the treated group had remained untreated. Because the stores that adopt the technology are disproportionately located in the USA, the treated group would have had lower revenues in 2019, which would then have caught up in 2020 before surpassing those of the untreated group in 2021 and remaining higher in 2022 and 2023. Knowing with certainty that this is the case is the beauty of the Monte Carlo.  
+
+If this were a practical application, the estimates of the estimates in the 'pre' having confidence bands that do not cross zero would give a hint that something is amiss, as they indicate that the pre-trends are not parallel. It is important to note, however, the distinction between parallel **pre**-trends and the parallel trends assumption. Parallel pre-trends are neither sufficient nor necessary for difference-in-differences or TWFE estimates to be valid. The parallel trends assumption, however, is one that the validity of these estimators very much relies on. Testing for parallel pre-trends gives us evidence that the trends between the two groups likely would have remained parallel in the post-training periods had the treated group remained untreated. However, this is not necessarily the case. One could imagine a scenario in which the trends between the two groups were parallel and then something changed simultaneously with the treatment to effect the dynamics of the outcome variable. The reverse is also possible. Even if pre-trends are not parallel, it is possible that the outcome paths would have been parallel in the post-period, absent treatment. 
 
 
 ### Covariates with Changing Values
