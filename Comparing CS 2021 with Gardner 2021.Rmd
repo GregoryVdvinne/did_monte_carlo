@@ -10,6 +10,11 @@ output:
 ---
 
 ```{r setup, include=TRUE, message=FALSE, warning=FALSE}
+
+### To do:
+  # Look into using map_dfr to bind multiple runs of the sim together 
+  # Make own plotting function. Would include using summarise to average across sim runs 
+
 #Clear memory
 rm(list = ls(all=T))
 
