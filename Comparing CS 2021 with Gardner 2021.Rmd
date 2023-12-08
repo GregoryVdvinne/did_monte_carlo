@@ -34,7 +34,7 @@ knitr::opts_chunk$set(include = TRUE, warning = FALSE, message = FALSE,
 
 ```{r User-Defined Functions}
 
-my_event_study <- function(data) {
+my_event_study <- function(data, xformla = NULL, true_effect) {
   rbind(
     event_study(
       yname = "revenue",  
@@ -42,6 +42,7 @@ my_event_study <- function(data) {
       idname = "id",        
       gname = "g",
       estimator = "TWFE",
+      xformla = xformla,
       data = data
       ),
     event_study(
@@ -50,6 +51,7 @@ my_event_study <- function(data) {
       idname = "id",        
       gname = "g",
       estimator = "did2s",
+      xformla = xformla,
       data =data
       ),
     event_study(
@@ -58,9 +60,11 @@ my_event_study <- function(data) {
       idname = "id",        
       gname = "g",
       estimator = "did",
+      xformla = xformla,
       data = data
       )
-  )
+  ) %>%
+    left_join(true_effect, by = "term")
 }
 
 
@@ -87,7 +91,7 @@ n.periods <- 5
 
 To begin, we have a balanced panel consisting of `r n.periods` periods (years) and `r n.units` units (store locations). Approximately 50%  of stores have not adopted the technology (i.e., they are untreated), while the other 50% have adopted the technology (i.e., they are treated at some point). Among these stores, approximately 1/4 adopted the technology in each of the last four years of our panel. In the first year, none of the stores have adopted the technology yet. For now, we will say that stores are treated in the first year that they adopt the technology and remain treated in all subsequent years. Additionally, there is one covariate, which is a dummy variable that indicates whether a store is located in an urban area or not. Approximately half of stores are in urban areas. Stores located in urban areas are twice as likely to adopt the technology as stores in non-urban areas; approximately 2/3 stores in urban areas adopt the technology, while 1/3 of stores in non-urban areas do. 
 
-Lastly, we have revenue, which is determined as follows. For each store, revenue in each year is drawn from a random normal distribution with a mean of 1 000 000 and a standard deviation of 100 000, plus the effects of being located in an urban area and adopting the technology. The ceteris paribus effect of being located in an urban area is an additional 50 000 per year of revenue, while the ceteris paribus effect of the treatment is an additional 100 000 per year of revenue. This effect is completely homogeneous. 
+Lastly, we have revenue, which is determined as follows. For each store, revenue in each year is equal to 1 million, plus the effects of being located in an urban area and adopting the technology and an idiosyncratic error term drawn from a random normal distribution with a mean of zero and a standard deviation of 100 thousand. The ceteris paribus effect of being located in an urban area is an additional 50 thousand per year of revenue, while the ceteris paribus effect of the treatment is an additional 100 thousand per year of revenue. This effect is completely homogeneous. 
 
 ```{r Generate Data, echo=TRUE}
 
@@ -96,7 +100,7 @@ myData <- as.data.frame(rep(1:n.units, n.periods))
 colnames(myData) <- "id"
 
 #For reproducibility
-set.seed(97)
+set.seed(123)
 #Add other columns
 myData <- myData %>%
   arrange(by=id) %>% 
@@ -115,11 +119,12 @@ myData <- myData %>%
   rowwise() %>%
   mutate(treated = case_when(g<=year & g!=0 ~ 1,
                              TRUE ~ 0),
-         revenue = (rnorm(1, mean = 1000000, sd =100000) + #Average revenue of 1M. Plus:
+         revenue = 1000000 + #1M intercept plus:
            50000*urban + # additional 50k if in urban area
-           100000*treated # treatment effect: 100k 
-           ) 
+           100000*treated + # treatment effect: 100k 
+           rnorm(n=1, mean =0, sd = 100000) # mean 0 error w/ sd= 100k
          ) 
+          
 ```
 
 Now, to ensure that the reader has a good comprehension of the simulated data set, I provide a few tables to give some insight into the data. The first table shows what the data set looks like for one treated and one untreated store. 
@@ -189,10 +194,7 @@ true_effect <- data.table(
 )
 
 #Run our three estimators
-output <- my_event_study(myData)
-
-#Add column for true effect to DF of estimates
-output <- left_join(output, true_effect, by = "term")
+output <- my_event_study(myData, true_effect = true_effect)
 
 #Plot the estimates
 plot_event_study(output) + 
@@ -226,9 +228,11 @@ true_effect <- data.table(
                e_23)
 )
 
+#For reproducibility
+set.seed(123)
 #Add heterogeneous effects to data
 myData2 <- myData %>% 
-  mutate(revenue = rnorm(1, mean = 1000000, sd =100000) +
+  mutate(revenue = 1000000 + #1M intercept
            50000*urban +
            #treatment effect dependent on year
            case_when(
@@ -237,14 +241,12 @@ myData2 <- myData %>%
              year == 2021 ~ treated*e_21,
              year == 2022 ~ treated*e_22,
              year == 2023 ~ treated*e_23
-           )
+           ) +
+           rnorm(n=1, mean =0, sd = 100000) # error w/ mean 0 & sd= 100k
          ) 
 
 #Run our three estimators
-output <- my_event_study(myData2)
-
-#Add column for true effect to DF of estimates
-output <- left_join(output, true_effect, by = "term")
+output <- my_event_study(myData2, true_effect = true_effect)
 
 #Plot the results
 plot_event_study(output) + 
@@ -269,6 +271,8 @@ true_effect <- data.table(
   true_effect = c(rep(0,4),rep(100000,4))
 )
 
+#For reproducibility
+set.seed(123)
 #Add the covariate indicating whether location is in Canada
 myData <- myData %>%
   group_by(id) %>%
@@ -278,7 +282,7 @@ myData <- myData %>%
     )
   ) %>%
   rowwise() %>%
-  mutate(revenue = rnorm(1, mean = 1000000, sd =100000) +
+  mutate(revenue = 1000000 +
            50000*urban +
            #Effect of canada covariate dependent on year
            case_when(
@@ -286,7 +290,8 @@ myData <- myData %>%
              year == 2020 ~ usa*0,
              TRUE ~  usa*50000
            ) +
-           100000*treated
+           100000*treated + 
+           rnorm(n=1, mean =0, sd = 100000) # error w/ mean 0 & sd= 100k
   ) %>%
   ungroup()
 
@@ -295,10 +300,7 @@ myData <- myData %>%
 #   group_by(year, canada, treated) %>%
 #   summarise(revenue = mean(revenue))
 
-output <- my_event_study(myData)
-
-#Add column for true effect to DF of estimates
-output <- left_join(output, true_effect, by = "term")
+output <- my_event_study(myData, true_effect = true_effect)
 
 plot_event_study(output) + 
   geom_line(aes(x = term, y=true_effect), color = "red")
@@ -359,9 +361,13 @@ Speaking within our example, say we wanted to control for the aggregate skill le
 
 As a counter-example, imagine that there is some sort of new policy that is being rolled out by some municipalities but not others. The policy hurts revenues at locations in these municipalities (maybe it is some sort of a 'sin' tax on our products, or a ban on a particularly effective form of marketing).Moreover, municipalities in Canada are twice as likely to introduce this policy as American municipalities. Recall that Canadian municipalities are less likely to adopt the technology, which means that this new policy variable is negatively correlated with treatment. Last, let's assume that the stores are all (or nearly all) located in different munucipalities. If municipalities were sufficiently large and locations were sufficiently plentiful that there were treated and untreated units in every municipality, one could actually arrive at an unbiased estimate by conditioning on municipality using Callaway and Sant'Anna (2020). 
 
-In this simulation revenue is determined as follows. For each store, revenue in each year is drawn from a random normal distribution with a mean of 1 000 000 and a standard deviation of 100 000, minus 200 000 if a location is in a municipality with the policy discussed above, plus the 100 000 treatment effect. The policy is introduced randomly in any of the five years or not at all. MUST RE WORD In any given year for a Canadian location, the odds of the policy being implemented by the local municipality are 1 in 10. For locations in the USA, the odds are 1 in 20.    
+In this simulation revenue is determined as follows. For each store, revenue in each year is equal to one million, minus 200 000 if a location is in a municipality with the policy discussed above, plus the 100 000 treatment effect, plus an idiosyncratic error term which is drawn from random normal distribution with mean zero and a standard deviation of 100 000. The policy is introduced randomly in any of the five years or not at all. MUST RE WORD In any given year for a Canadian location, the odds of the policy being implemented by the local municipality are 1 in 10. For locations in the USA, the odds are 1 in 20.    
 
 ```{r Covariates With Changing Values}
+
+#For reproducibility
+set.seed(123)
+
 #Add our policy variable and calculate our new revenue
 myData <-  myData %>%
   group_by(id) %>%
@@ -373,72 +379,19 @@ myData <-  myData %>%
   rowwise() %>%
   mutate(policy = case_when(policy_year<=year & policy_year !=0 ~ 1,
                             TRUE ~ 0),
-         revenue = rnorm(1, 1000000, 100000) 
+         revenue = 1000000
                    + policy * -200000
                    + treated * 100000
+                   + rnorm(n=1, mean =0, sd = 100000) # error w/ mean 0 & sd= 100k
   )
 
-output <- my_event_study(myData)
-
-#Add column for true effect to DF of estimates
-output <- left_join(output, true_effect, by = "term")
+output <- my_event_study(myData, true_effect = true_effect)
 
 plot_event_study(output) + 
   geom_line(aes(x = term, y=true_effect), color = "red")
 
-# #Estimate CS w/ conditioning on country
-# output <- event_study(
-#       yname = "revenue",  
-#       tname = "year",       
-#       idname = "id",        
-#       gname = "g",
-#       estimator = "did",
-#       xformla = ~ usa,
-#       data = myData
-#       )
-
-
-#Add column for true effect to DF of estimates
-output <- left_join(output, true_effect, by = "term")
-
-plot_event_study(output) + 
-  geom_line(aes(x = term, y=true_effect), color = "red")
-
-
-
-#Estimate Gardner w/ conditioning on policy
-output <- event_study(
-      yname = "revenue",  
-      tname = "year",       
-      idname = "id",        
-      gname = "g",
-      estimator = "did2s",
-      xformla = ~ policy,
-      data = myData
-      )
-
-
-#Add column for true effect to DF of estimates
-output <- left_join(output, true_effect, by = "term")
-
-plot_event_study(output) + 
-  geom_line(aes(x = term, y=true_effect), color = "red")
-
-
-#Estimate TWFE w/ conditioning on policy
-output <- event_study(
-      yname = "revenue",  
-      tname = "year",       
-      idname = "id",        
-      gname = "g",
-      estimator = "TWFE",
-      xformla = ~ policy,
-      data = myData
-      )
-
-
-#Add column for true effect to DF of estimates
-output <- left_join(output, true_effect, by = "term")
+#Estimate model with conditioning on policy variable
+output <- my_event_study(myData, xformla = ~policy, true_effect = true_effect)
 
 plot_event_study(output) + 
   geom_line(aes(x = term, y=true_effect), color = "red")
