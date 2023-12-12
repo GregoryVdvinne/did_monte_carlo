@@ -90,8 +90,8 @@ I find simulation-based explanations easier to follow when they are explained in
 
 ``` {r set parameters}
 #Set number of units and periods
-n.units <- 10000
-n.periods <- 5
+n_units <- 1000
+n_periods <- 5
 
 ```
 
@@ -101,14 +101,18 @@ Lastly, we have revenue, which is determined as follows. For each store, revenue
 
 ```{r Generate Data, echo=TRUE}
 
-#First column
-myData <- as.data.frame(rep(1:n.units, n.periods))
-colnames(myData) <- "id"
 
 #For reproducibility
 set.seed(123)
-#Add other columns
-myData <- myData %>%
+
+#Create data for simulation 1
+create_data_1 <- function(n.units= n_units, n.periods=n_periods) { 
+  
+  #First column
+  myData <- as.data.frame(rep(1:n.units, n.periods))
+  colnames(myData) <- "id"
+
+  myData %>%
   arrange(by=id) %>% 
   cbind(year = rep(2019:(2019+n.periods-1),n.units)) %>% #Add periods
   group_by(id) %>%
@@ -130,6 +134,9 @@ myData <- myData %>%
            100000*treated + # treatment effect: 100k 
            rnorm(n=1, mean =0, sd = 100000) # mean 0 error w/ sd= 100k
          ) 
+}
+
+myData <- create_data_1()
           
 ```
 
@@ -199,8 +206,19 @@ true_effect <- data.table(
   true_effect = c(rep(0,4),rep(100000,4))
 )
 
-#Run our three estimators
-output <- my_event_study(myData, true_effect = true_effect)
+
+get_est_1 <- function(...) { #... must be included for map_dfr to work
+  myData <- create_data_1()
+  #Run our three estimators
+  output <- my_event_study(myData, true_effect = true_effect)
+  as.data.frame(output)
+}
+
+test <- get_est_1()
+
+output <- map_dfr(1:3, get_est_1) #works
+
+
 
 #Plot the estimates
 plot_event_study(output) + 
