@@ -214,7 +214,7 @@ get_est_1 <- function(...) { # '...' must be included for map_dfr to work
   myData <- create_data_1()
   #Run our three estimators
   output <- my_event_study(myData, true_effect = true_effect)
-  as.data.frame(output)
+  output
 }
 
 
@@ -248,21 +248,32 @@ e_23 <- 200000
 Now, let us consider a case in which the effects of the treatment are heterogeneous. That is, the effects are not the same for all groups and periods. We will make it so that the treatment effect is +`r scales::dollar(e_20)` in revenue in 2020, `r scales::dollar(e_21)` 2021, `r scales::dollar(e_22)` in 2022 and `r scales::dollar(e_23)` in 2023. Perhaps this steady increase in the benefit from the technology arises from some sort of network  effect -  as more people/firms/locations adopt the technology, it becomes more effective. Note that it does not become more effect because units have been in the 'treated' state for more years. It becomes more effective as more calendar years pass, regardless of how long a given unit has been treated.
 
 ``` {r Estimates For Scenario 2, echo = TRUE}
-#Calculate true effect and save
-true_effect <- data.table(
-  term = -4:3,
-  true_effect = c(rep(0,4),
-               (e_20+e_21+e_22+e_23)/4,
-               (e_21+e_22+e_23)/3,
-               (e_22+e_23)/2,
-               e_23)
-)
 
-#For reproducibility
-set.seed(123)
-#Add heterogeneous effects to data
-myData2 <- myData %>% 
-  mutate(revenue = 1000000 + #1M intercept
+#Create data for simulation 2
+create_data_2 <- function(n.units= n_units, n.periods=n_periods) { 
+  
+  #First column
+  myData <- as.data.frame(rep(1:n.units, n.periods))
+  colnames(myData) <- "id"
+
+  myData %>%
+  arrange(by=id) %>% 
+  cbind(year = rep(2019:(2019+n.periods-1),n.units)) %>% #Add periods
+  group_by(id) %>%
+  mutate(g = case_when(        #Assign to treatment groups
+    id %in% (1:n.units/2) ~ 0, #50% untreated
+    id %in% ((n.units/2+1):(n.units/2+n.units/(n.periods-1)/2)) ~ 2020,
+    id %in% ((n.units/2+n.units/(n.periods-1)/2+1):(n.units/2+n.units*2/(n.periods-1)/2)) ~ 2021,
+    id %in% ((n.units/2+n.units*2/(n.periods-1)/2+1):(n.units/2+n.units*3/(n.periods-1)/2)) ~ 2022,
+    TRUE ~ 2023
+  ), 
+         urban = case_when(g==0 ~ sample(c(0,0,1),1),
+                           TRUE ~ sample(c(0,1,1),1)) # Urban locations twice as likely to be treated
+  ) %>%
+  rowwise() %>%
+  mutate(treated = case_when(g<=year & g!=0 ~ 1,
+                             TRUE ~ 0),
+         revenue = 1000000 + #1M intercept
            50000*urban +
            #treatment effect dependent on year
            case_when(
@@ -274,9 +285,33 @@ myData2 <- myData %>%
            ) +
            rnorm(n=1, mean =0, sd = 100000) # error w/ mean 0 & sd= 100k
          ) 
+}
 
-#Run our three estimators
-output <- my_event_study(myData2, true_effect = true_effect)
+
+#Calculate true effect and save
+true_effect <- data.table(
+  term = -4:3,
+  true_effect = c(rep(0,4),
+               (e_20+e_21+e_22+e_23)/4,
+               (e_21+e_22+e_23)/3,
+               (e_22+e_23)/2,
+               e_23)
+)
+
+#A function to run a simulation 1 time and run estimators
+get_est_2 <- function(...) { # '...' must be included for map_dfr to work
+  myData <- create_data_2()
+  #Run our three estimators
+  output <- my_event_study(myData, true_effect = true_effect)
+  output
+}
+
+#For reproducibility
+set.seed(123)
+#Run simulation multiple times & save mean output.
+output <- map_dfr(1:n_sim, get_est_2) %>% #Run sim n_sim times & rbind() outputs
+  group_by(term, estimator) %>%
+  summarise(across(everything(), mean))
 
 #Plot the results
 plot_event_study(output) + 
@@ -295,24 +330,35 @@ Therefore, although the value of this covariate is constant over time, its effec
 
 ``` {r Estimates For Scenario 3, echo = TRUE}
 
-#Save true effect
-true_effect <- data.table(
-  term = -4:3,
-  true_effect = c(rep(0,4),rep(100000,4))
-)
+#Create data for simulation 3
+create_data_3 <- function(n.units= n_units, n.periods=n_periods) { 
+  
+  #First column
+  myData <- as.data.frame(rep(1:n.units, n.periods))
+  colnames(myData) <- "id"
 
-#For reproducibility
-set.seed(123)
-#Add the covariate indicating whether location is in Canada
-myData <- myData %>%
+  myData %>%
+  arrange(by=id) %>% 
+  cbind(year = rep(2019:(2019+n.periods-1),n.units)) %>% #Add periods
   group_by(id) %>%
-  mutate(usa = case_when(
-    g == 0 ~ sample(c(0,0,0,1),1),
-    TRUE == 1 ~ sample(c(0,1,1,1),1)
-    )
+  mutate(g = case_when(        #Assign to treatment groups
+    id %in% (1:n.units/2) ~ 0, #50% untreated
+    id %in% ((n.units/2+1):(n.units/2+n.units/(n.periods-1)/2)) ~ 2020,
+    id %in% ((n.units/2+n.units/(n.periods-1)/2+1):(n.units/2+n.units*2/(n.periods-1)/2)) ~ 2021,
+    id %in% ((n.units/2+n.units*2/(n.periods-1)/2+1):(n.units/2+n.units*3/(n.periods-1)/2)) ~ 2022,
+    TRUE ~ 2023
+    ), 
+         urban = case_when(g==0 ~ sample(c(0,0,1),1),
+                           TRUE ~ sample(c(0,1,1),1)
+                           ), # Urban locations twice as likely to be treated
+         usa = case_when(g == 0 ~ sample(c(0,0,0,1),1),
+                         TRUE ~ sample(c(0,1,1,1),1)
+                         ) #American locations thrice as likely to be treated
   ) %>%
   rowwise() %>%
-  mutate(revenue = 1000000 +
+  mutate(treated = case_when(g<=year & g!=0 ~ 1,
+                             TRUE ~ 0),
+         revenue = 1000000 +
            50000*urban +
            #Effect of canada covariate dependent on year
            case_when(
@@ -322,31 +368,34 @@ myData <- myData %>%
            ) +
            100000*treated + 
            rnorm(n=1, mean =0, sd = 100000) # error w/ mean 0 & sd= 100k
-  ) %>%
-  ungroup()
+         ) 
+}
 
-# #View revenue by treatment level, country and year
-# inspection <- myData %>%
-#   group_by(year, canada, treated) %>%
-#   summarise(revenue = mean(revenue))
+#Save true effect
+true_effect <- data.table(
+  term = -4:3,
+  true_effect = c(rep(0,4),rep(100000,4))
+)
 
-output <- my_event_study(myData, true_effect = true_effect)
+#A function to run a simulation 1 time and run estimators
+get_est_3 <- function(...) { # '...' must be included for map_dfr to work
+  myData <- create_data_3()
+  #Run our three estimators
+  output <- my_event_study(myData, true_effect = true_effect)
+  output
+}
+
+#For reproducibility
+set.seed(123)
+#Run simulation multiple times & save mean output.
+output <- map_dfr(1:n_sim, get_est_3) %>% #Run sim n_sim times & rbind() outputs
+  group_by(term, estimator) %>%
+  summarise(across(everything(), mean))
 
 plot_event_study(output) + 
   geom_line(aes(x = term, y=true_effect), color = "red")
 
 
-# #CS att gt 
-# attgt <- att_gt(
-#       yname = "revenue",  
-#       tname = "year",       
-#       idname = "id",        
-#       gname = "g",
-#       data = myData
-# )
-# 
-# ggdid(attgt) 
-#  
 ```
 
 
@@ -360,8 +409,11 @@ To my knowledge, in the cases of the both TWFE and Gardner (2021), variables tha
 
 ``` {r Conditioning on Country}
 
-#Estimate CS w/ conditioning on country
-output <- event_study(
+#A function to run a simulation 1 time and run estimators
+get_est_cs_3 <- function(...) { # '...' must be included for map_dfr to work
+  myData <- create_data_3()
+  #Run our three estimators
+  output <- event_study(
       yname = "revenue",  
       tname = "year",       
       idname = "id",        
@@ -370,7 +422,15 @@ output <- event_study(
       xformla = ~ usa,
       data = myData
       )
+  output
+}
 
+#For reproducibility
+set.seed(123)
+#Run simulation multiple times & save mean output.
+output <- map_dfr(1:n_sim, get_est_cs_3) %>% #Run sim n_sim times & rbind() outputs
+  group_by(term, estimator) %>%
+  summarise(across(everything(), mean))
 
 #Add column for true effect to DF of estimates
 output <- left_join(output, true_effect, by = "term")
@@ -391,43 +451,109 @@ Speaking within our example, say we wanted to control for the aggregate skill le
 
 As a counter-example, imagine that there is some sort of new policy that is being rolled out by some municipalities but not others. The policy hurts revenues at locations in these municipalities (maybe it is some sort of a 'sin' tax on our products, or a ban on a particularly effective form of marketing).Moreover, municipalities in Canada are twice as likely to introduce this policy as American municipalities. Recall that Canadian municipalities are less likely to adopt the technology, which means that this new policy variable is negatively correlated with treatment. Last, let's assume that the stores are all (or nearly all) located in different munucipalities. If municipalities were sufficiently large and locations were sufficiently plentiful that there were treated and untreated units in every municipality, one could actually arrive at an unbiased estimate by conditioning on municipality using Callaway and Sant'Anna (2020). 
 
-In this simulation revenue is determined as follows. For each store, revenue in each year is equal to one million, minus 200 000 if a location is in a municipality with the policy discussed above, plus the 100 000 treatment effect, plus an idiosyncratic error term which is drawn from random normal distribution with mean zero and a standard deviation of 100 000. The policy is introduced randomly in any of the five years or not at all. MUST RE WORD In any given year for a Canadian location, the odds of the policy being implemented by the local municipality are 1 in 10. For locations in the USA, the odds are 1 in 20.    
+In this simulation revenue is determined as follows. For each store, revenue in each year is equal to one million, minus 350 000 if a location is in a municipality with the policy discussed above, plus the 100 000 treatment effect, plus an idiosyncratic error term which is drawn from random normal distribution with mean zero and a standard deviation of 100 000. The policy is introduced randomly in any of the five years or not at all. MUST RE WORD In any given year for a Canadian location, the odds of the policy being implemented by the local municipality are 1 in 10. For locations in the USA, the odds are 1 in 20.    
 
 ```{r Covariates With Changing Values}
 
-#For reproducibility
-set.seed(123)
+# #For reproducibility
+# set.seed(123)
+# 
+# #Add our policy variable and calculate our new revenue
+# myData <-  myData %>%
+#   group_by(id) %>%
+#   mutate(policy_year = case_when(
+#                                  usa == 1 ~ sample(c(2019,2020,2021,2022,2023, rep(0,15)),1),
+#                                  usa == 0 ~ sample(c(2019,2020,2021,2022,2023, rep(0,5)),1)
+#                                  )
+#          )%>%
+#   rowwise() %>%
+#   mutate(policy = case_when(policy_year<=year & policy_year !=0 ~ 1,
+#                             TRUE ~ 0),
+#          revenue = 1000000
+#                    + policy * -200000
+#                    + treated * 100000
+#                    + rnorm(n=1, mean =0, sd = 100000) # error w/ mean 0 & sd= 100k
+#   )
+# 
+# output <- my_event_study(myData, true_effect = true_effect)
+# 
+# plot_event_study(output) + 
+#   geom_line(aes(x = term, y=true_effect), color = "red")
+# 
+# #Estimate model with conditioning on policy variable
+# output <- my_event_study(myData, xformla = ~policy, true_effect = true_effect)
+# 
+# plot_event_study(output) + 
+#   geom_line(aes(x = term, y=true_effect), color = "red")
 
-#Add our policy variable and calculate our new revenue
-myData <-  myData %>%
+
+
+
+#Create data for simulation 3
+create_data_4 <- function(n.units= n_units, n.periods=n_periods) { 
+  
+  #First column
+  myData <- as.data.frame(rep(1:n.units, n.periods))
+  colnames(myData) <- "id"
+
+  myData %>%
+  arrange(by=id) %>% 
+  cbind(year = rep(2019:(2019+n.periods-1),n.units)) %>% #Add periods
   group_by(id) %>%
-  mutate(policy_year = case_when(
+  mutate(g = case_when(        #Assign to treatment groups
+    id %in% (1:n.units/2) ~ 0, #50% untreated
+    id %in% ((n.units/2+1):(n.units/2+n.units/(n.periods-1)/2)) ~ 2020,
+    id %in% ((n.units/2+n.units/(n.periods-1)/2+1):(n.units/2+n.units*2/(n.periods-1)/2)) ~ 2021,
+    id %in% ((n.units/2+n.units*2/(n.periods-1)/2+1):(n.units/2+n.units*3/(n.periods-1)/2)) ~ 2022,
+    TRUE ~ 2023
+    ), 
+         usa = case_when(g == 0 ~ sample(c(0,0,0,1),1),
+                         TRUE ~ sample(c(0,1,1,1),1)
+                         ), #American locations thrice as likely to be treated
+         policy_year = case_when(
                                  usa == 1 ~ sample(c(2019,2020,2021,2022,2023, rep(0,15)),1),
                                  usa == 0 ~ sample(c(2019,2020,2021,2022,2023, rep(0,5)),1)
                                  )
-         )%>%
+  ) %>%
   rowwise() %>%
-  mutate(policy = case_when(policy_year<=year & policy_year !=0 ~ 1,
+  mutate(treated = case_when(g<=year & g!=0 ~ 1,
+                             TRUE ~ 0),
+         policy = case_when(policy_year<=year & policy_year !=0 ~ 1,
                             TRUE ~ 0),
          revenue = 1000000
-                   + policy * -200000
+                   + policy * -350000
                    + treated * 100000
                    + rnorm(n=1, mean =0, sd = 100000) # error w/ mean 0 & sd= 100k
-  )
+         ) 
+}
 
-output <- my_event_study(myData, true_effect = true_effect)
+#A function to run a simulation 1 time and run estimators
+get_est_4 <- function(...) { # '...' must be included for map_dfr to work
+  myData <- create_data_4()
+  #Run our three estimators
+  output_conditional <- my_event_study(myData, xformla = ~policy, true_effect = true_effect) %>%
+    mutate(conditioning = 1)
+  output_unconditional <- my_event_study(myData, true_effect = true_effect) %>%
+    mutate(conditioning = 0)
+  rbind(output_conditional, output_unconditional)
+}
 
-plot_event_study(output) + 
-  geom_line(aes(x = term, y=true_effect), color = "red")
+output <- get_est_4()
 
-#Estimate model with conditioning on policy variable
-output <- my_event_study(myData, xformla = ~policy, true_effect = true_effect)
+#For reproducibility
+set.seed(123)
+#Run simulation multiple times & save mean output.
+output <- map_dfr(1:25, get_est_4) %>% #Run sim n_sim times & rbind() outputs
+  group_by(term, estimator, conditioning) %>%
+  summarise(across(everything(), mean))
 
-plot_event_study(output) + 
-  geom_line(aes(x = term, y=true_effect), color = "red")
+#Plot results w/o conditioning in policy variable
+plot_event_study(filter(output, conditioning == 0)) +
+  geom_line(aes(x = term,  y=true_effect), color = "red")
 
-
-
+#Plot results w/ conditioning in policy variable
+plot_event_study(filter(output, conditioning == 1)) +
+  geom_line(aes(x = term,  y=true_effect), color = "red")
 
 ```
 
