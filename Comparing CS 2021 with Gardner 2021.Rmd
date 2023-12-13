@@ -90,9 +90,9 @@ I find simulation-based explanations easier to follow when they are explained in
 
 ``` {r set parameters}
 #Set number of units, periods and simulations
-n_units <- 1000
+n_units <- 2000
 n_periods <- 5
-n_sim <- 3
+n_sim <- 50
 
 ```
 
@@ -455,38 +455,6 @@ In this simulation revenue is determined as follows. For each store, revenue in 
 
 ```{r Covariates With Changing Values}
 
-# #For reproducibility
-# set.seed(123)
-# 
-# #Add our policy variable and calculate our new revenue
-# myData <-  myData %>%
-#   group_by(id) %>%
-#   mutate(policy_year = case_when(
-#                                  usa == 1 ~ sample(c(2019,2020,2021,2022,2023, rep(0,15)),1),
-#                                  usa == 0 ~ sample(c(2019,2020,2021,2022,2023, rep(0,5)),1)
-#                                  )
-#          )%>%
-#   rowwise() %>%
-#   mutate(policy = case_when(policy_year<=year & policy_year !=0 ~ 1,
-#                             TRUE ~ 0),
-#          revenue = 1000000
-#                    + policy * -200000
-#                    + treated * 100000
-#                    + rnorm(n=1, mean =0, sd = 100000) # error w/ mean 0 & sd= 100k
-#   )
-# 
-# output <- my_event_study(myData, true_effect = true_effect)
-# 
-# plot_event_study(output) + 
-#   geom_line(aes(x = term, y=true_effect), color = "red")
-# 
-# #Estimate model with conditioning on policy variable
-# output <- my_event_study(myData, xformla = ~policy, true_effect = true_effect)
-# 
-# plot_event_study(output) + 
-#   geom_line(aes(x = term, y=true_effect), color = "red")
-
-
 
 
 #Create data for simulation 3
@@ -543,7 +511,7 @@ output <- get_est_4()
 #For reproducibility
 set.seed(123)
 #Run simulation multiple times & save mean output.
-output <- map_dfr(1:25, get_est_4) %>% #Run sim n_sim times & rbind() outputs
+output <- map_dfr(1:n_sim, get_est_4) %>% #Run sim n_sim times & rbind() outputs
   group_by(term, estimator, conditioning) %>%
   summarise(across(everything(), mean))
 
