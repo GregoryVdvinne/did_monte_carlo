@@ -1,5 +1,5 @@
 ---
-title: "Exploring Modern Difference-in-Differences Techniques with A Monte Carlo Simulation"
+title: "Exploring Modern Difference-in-Differences Techniques with Monte Carlo Simulations"
 author: "Gregory Vander Vinne"
 date: "`r Sys.Date()`"
 output:
@@ -12,9 +12,7 @@ output:
 ```{r setup, include=TRUE, message=FALSE, warning=FALSE}
 
 ### To do:
-  # Look into using map_dfr to bind multiple runs of the sim together 
-  # Make own plotting function. Would include using summarise to average across sim runs 
-  # Treatment that 'turns off'
+  # Make own plotting function.
 
 #Clear memory
 rm(list = ls(all=T))
@@ -80,29 +78,29 @@ my_event_study <- function(data, xformla = NULL, true_effect) {
 
 In my day job, I do a fair bit of work in the realm of causal inference. Typically, this involves looking at whether a particular policy resulted in improved outcomes for individuals who experienced the policy. There are many different ways of doing this. One of the most common methods, or groups of methods, is difference-in-differences (DiD). DiD methods have been advancing rapidly in recent years following the discovery of a number of issues with two-way fixed effects estimators (see Borusyak and Jaravel (2018), de Chaisemartin and D'Haultfoeuille (2020), Goodman-Bacon (2021), and Sun and Abraham (2021). See Roth (2023) for a synthesis of the literature).
 
-Recently I have been exploring how different variations of difference-in-differences estimators that allow for staggered adoption behave under different circumstances. The {did2s} and {did} packages in R make this relatively easy to do with Monte Carlo simulations. While I have explored other estimators as well, in this post I wish to focus on two in particular. These two are the estimators proposed in Gardner (2021), and Callaway and Sant'Anna (2020). I will not be providing any analytical proofs or getting into any of the math behind how these to methods work. Rather, I will be illustrating with Monte Carlo simulations how these estimators behave (or misbehave) given different types of treatment effects and covariates. I will also be comparing them to the classic two-way fixed effects estimator. 
+Recently, I have been exploring how different variations of DiD estimators that allow for staggered adoption behave under different circumstances. The {did2s} and {did} packages in R make this relatively easy to do with Monte Carlo simulations. While I have explored other estimators as well, in this post I wish to focus on two in particular. These two are the estimators proposed in Gardner (2021), and Callaway and Sant'Anna (2020). I will not be providing any analytical proofs or getting into any of the math behind how these to methods work. Rather, I will be illustrating with Monte Carlo simulations how these estimators behave (or misbehave) given different types of treatment effects and covariates. I will also be comparing them to the classic two-way fixed effects estimator. 
 
 ## Simulations
+
+``` {r set parameters}
+#Set number of units, periods and simulations.
+  #Applies to all scenarios
+n_units <- 1000
+n_periods <- 5
+n_sim <- 10
+
+```
 
 I find simulation-based explanations easier to follow when they are explained in terms of a hypothetical real world scenario and we give the variables realistic values and names. For this simulation, let us imagine that a large company with many locations wants to measure whether adoption of a particular technology improves sales. Some of this company's locations have adopted the technology, while others have not. Furthermore, the locations that have adopted the technology have adopted it at different times and have chosen to adopt it of their own volition, which means that the treatment is not randomly assigned. We shall explore how we might measure the effects of the technology on sales using the methods of Callaway and Sant'Anna (2021), Gardner (2021), and Two-Way Fixed Effects, hereafter referred to as TWFE.
 
 ### Homogeneous Treatment and Covariates with Fixed Effects
 
-``` {r set parameters}
-#Set number of units, periods and simulations
-n_units <- 1000
-n_periods <- 5
-n_sim <- 3
 
-```
+To begin, we have a balanced panel consisting of `r n_periods` periods (years) and `r n_units` units (store locations). Approximately 50%  of stores do not adopt the technology (i.e., they are untreated), while the other 50% have adopted the technology (i.e., they are treated at some point). Among these stores, 1/4 adopt the technology in each of the last four years of the panel. In the first year, none of the stores have adopted the technology yet. For now, we will say that stores are treated in the first year that they adopt the technology and remain treated in all subsequent years. Additionally, there is one covariate, which is a dummy variable that indicates whether a store is located in an urban area or not. Approximately half of stores are in urban areas. Stores located in urban areas are twice as likely to adopt the technology as stores in non-urban areas; approximately 2/3 stores in urban areas adopt the technology, while 1/3 of stores in non-urban areas do. 
 
-To begin, we have a balanced panel consisting of `r n.periods` periods (years) and `r n.units` units (store locations). Approximately 50%  of stores have not adopted the technology (i.e., they are untreated), while the other 50% have adopted the technology (i.e., they are treated at some point). Among these stores, approximately 1/4 adopted the technology in each of the last four years of our panel. In the first year, none of the stores have adopted the technology yet. For now, we will say that stores are treated in the first year that they adopt the technology and remain treated in all subsequent years. Additionally, there is one covariate, which is a dummy variable that indicates whether a store is located in an urban area or not. Approximately half of stores are in urban areas. Stores located in urban areas are twice as likely to adopt the technology as stores in non-urban areas; approximately 2/3 stores in urban areas adopt the technology, while 1/3 of stores in non-urban areas do. 
-
-Lastly, we have revenue, which is determined as follows. For each store, revenue in each year is equal to 1 million, plus the effects of being located in an urban area and adopting the technology and an idiosyncratic error term drawn from a random normal distribution with a mean of zero and a standard deviation of 100 thousand. The ceteris paribus effect of being located in an urban area is an additional 50 thousand per year of revenue, while the ceteris paribus effect of the treatment is an additional 100 thousand per year of revenue. This effect is completely homogeneous. 
+Lastly, we have revenue, which is determined as follows. For each store, revenue in each year is equal to 1 million, plus the effect of being located in an urban area, the effect of adopting the technology (treatment effect) and an idiosyncratic error term drawn from a random normal distribution with a mean of zero and a standard deviation of 75 thousand. The ceteris paribus effect of being located in an urban area is an additional 50 thousand per year of revenue, while the ceteris paribus effect of the treatment is an additional 100 thousand per year of revenue. This effect is completely homogeneous. 
 
 ```{r Generate Data, echo=TRUE}
-
-
 
 #Create data for simulation 1
 create_data_1 <- function(n.units= n_units, n.periods=n_periods) { 
@@ -128,22 +126,22 @@ create_data_1 <- function(n.units= n_units, n.periods=n_periods) {
   rowwise() %>%
   mutate(treated = case_when(g<=year & g!=0 ~ 1,
                              TRUE ~ 0),
-         revenue = 1000000 + #1M intercept plus:
+         revenue = 1000000 + # 1M intercept plus:
            50000*urban + # additional 50k if in urban area
-           100000*treated + # treatment effect: 100k 
-           rnorm(n=1, mean =0, sd = 100000) # mean 0 error w/ sd= 100k
+           100000*treated + # treatment effect: 75k 
+           rnorm(n=1, mean =0, sd = 75000) # mean 0 error w/ sd= 75k
          ) 
 }
 
 
 #For reproducibility
-set.seed(123)
+set.seed(97)
 #Create example of one run of simulated data
 myData <- create_data_1()
           
 ```
 
-Now, to ensure that the reader has a good comprehension of the simulated data set, I provide a few tables to give some insight into the data. The first table shows what the data set looks like for one treated and one untreated store. 
+Now, to ensure that the reader has a good comprehension of the data being simulated, I provide a few tables that illustrate data created by one run of the data simulator. The first table shows what the data set looks like for one treated and one untreated store. 
 
 ```{r A Glimpse of the Data, echo=TRUE}
 
@@ -168,6 +166,7 @@ myData %>%
     caption = "Data for One Store That Adopts the Technology and One that Does Not",
     col.names = c("ID","Year","Treatment Group","Urban Dummy","Treated Yet", "Revenue")
   )
+
 ```
 
 The table below shows mean revenue by treatment status and whether a store is located in an urban area. 
@@ -219,7 +218,7 @@ get_est_1 <- function(...) { # '...' must be included for map_dfr to work
 
 
 #For reproducibility
-set.seed(123)
+set.seed(97)
 #Run simulation multiple times & save mean output.
 output <- map_dfr(1:n_sim, get_est_1) %>% #Run sim n_sim times & rbind() outputs
   group_by(term, estimator) %>%
@@ -231,7 +230,7 @@ plot_event_study(output) +
   geom_line(aes(x = term, y=true_effect), color = "red")
 
 ```
-As can be seen above, the three methods all provide similar, unbiased estimates of the effect of the treatment. Note that we have not explicitly controlled for, or conditioned on, the the urban covaraite within any of the three methods. The estimates remain unbiased because although the covariate effects the **level** of the outcome variable, it does not effect the **dynamics** of the outcome variable - it has the same value and same effect in all periods. 
+As can be seen above, the three methods all provide similar, unbiased estimates of the effect of the treatment. Note that we have not explicitly controlled for, or conditioned on, the urban covaraite within any of the three methods. The estimates remain unbiased because although the covariate effects the *level* of the dependent variable, it does not effect the *dynamics* of the dependent variable - it has the same value and same effect in all periods. 
 
 ### Heterogeneous Treatment Effects
 
@@ -245,8 +244,9 @@ e_23 <- 200000
 
 ```
 
-Now, let us consider a case in which the effects of the treatment are heterogeneous. That is, the effects are not the same for all groups and periods. We will make it so that the treatment effect is +`r scales::dollar(e_20)` in revenue in 2020, `r scales::dollar(e_21)` 2021, `r scales::dollar(e_22)` in 2022 and `r scales::dollar(e_23)` in 2023. Perhaps this steady increase in the benefit from the technology arises from some sort of network  effect -  as more people/firms/locations adopt the technology, it becomes more effective. Note that it does not become more effect because units have been in the 'treated' state for more years. It becomes more effective as more calendar years pass, regardless of how long a given unit has been treated.
+Now, let us consider a case in which the effects of the treatment are heterogeneous. That is, the effects are not the same for all groups and periods. We will make it so that the treatment effect is +`r scales::dollar(e_20)` in revenue in 2020, +`r scales::dollar(e_21)` 2021, +`r scales::dollar(e_22)` in 2022 and +`r scales::dollar(e_23)` in 2023. Perhaps this steady increase in the benefit from the technology arises from some sort of network  effect -  as more people/firms/locations adopt the technology, it becomes more effective. Note that it does not become more effective because units have been in the 'treated' state for more years. It becomes more effective as more calendar years pass, regardless of how long a given unit has been treated.
 
+#### Estimating the Effects When Treatment Effects are Heterogeneous
 ``` {r Estimates For Scenario 2, echo = TRUE}
 
 #Create data for simulation 2
@@ -283,7 +283,7 @@ create_data_2 <- function(n.units= n_units, n.periods=n_periods) {
              year == 2022 ~ treated*e_22,
              year == 2023 ~ treated*e_23
            ) +
-           rnorm(n=1, mean =0, sd = 100000) # error w/ mean 0 & sd= 100k
+           rnorm(n=1, mean =0, sd = 75000) # error w/ mean 0 & sd= 75k
          ) 
 }
 
@@ -307,7 +307,7 @@ get_est_2 <- function(...) { # '...' must be included for map_dfr to work
 }
 
 #For reproducibility
-set.seed(123)
+set.seed(97)
 #Run simulation multiple times & save mean output.
 output <- map_dfr(1:n_sim, get_est_2) %>% #Run sim n_sim times & rbind() outputs
   group_by(term, estimator) %>%
@@ -318,16 +318,18 @@ plot_event_study(output) +
   geom_line(aes(x = term, y=true_effect), color = "red")
 
 ```
-
-#### Economic Shock?
+Above, we see the well-established result that TWFE yields biased estimates when treatment effects are not homogeneous. This issue is solved by the methods of Callaway and Sant'Anna (2021) and Gardner (2021). 
 
 
 ### Covariates with Dynamic Effects
 
-Let us return to a situation in which the effects of treatment are not heterogeneous. As in the first simulation, we will say that adopting the technology has the effect of increasing revenues by 100,000 per year in all years. However, we will introduce a covariate that does not have the same effect in all years. Let's imagine that this is a Canadian company with approximately half of its locations in Canada and half in the USA. Initially, in 2019, being located in the USA has a negative effect, perhaps due to inferior brand awareness. In 2019, being located in the USA has the effect of **reducing** revenues by 50 000, all else being equal. However, as time goes on, the brand grows in popularity in the USA, perhaps competitors in the USA start closing down, or the brand just becomes more of a fad in the USA than in Canada. As a result, in 2020, being located in the USA has neither a negative effect nor positive effect, while in 2021 onwards, being located in the United States has the effect of **boosting** revenues by 50 000. Furthermore, Canadian locations are less likely to adopt the technology than American locations, meaning that treatment is correlated with this variable. We will say that American locations are three times as likely to adopt the treatment as Canadian locations. 
+Let us return to a situation in which the effects of treatment are not heterogeneous. We will use homogeneous effects for the remainder of this demonstration so that we are only considering on complication at a time. 
 
-Therefore, although the value of this covariate is constant over time, its effect is not constant. Rather than merely affecting the **level** of the outcome variable, this covariate affects the **dynamics** of the outcome variable. First, let us compute the three different estimators that we have been discussing, without explicitly controlling for or conditioning on this new covariate in any of them.  
+As in the first simulation, we will say that adopting the technology has the effect of increasing revenues by `r scales::dollar(100000)`per year in all years. However, we will introduce a covariate that does not have the same effect in all years. Let's imagine that this is a Canadian company with approximately half of its locations in Canada and half in the USA. Initially, in 2019, being located in the USA has a negative effect, perhaps due to inferior brand awareness. In 2019, being located in the USA has the effect of **reducing** revenues by `r scales::dollar(50000)`, all else being equal. However, as time goes on, the brand grows in popularity in the USA, perhaps competitors in the USA start closing down, or the brand just becomes more of a fad in the USA than in Canada. As a result, in 2020, being located in the USA has neither a negative effect nor positive effect, while in 2021 onwards, being located in the United States has the effect of *boosting* revenues by `r scales::dollar(50000)`. Furthermore, Canadian locations are less likely to adopt the technology than American locations, meaning that treatment is correlated with this variable. We will say that American locations are three times as likely to adopt the treatment as Canadian locations. 
 
+Therefore, although the value of this covariate is constant over time, its effect is not constant. Rather than merely affecting the *level* of the outcome variable, this covariate affects the *dynamics* of the outcome variable. First, let us compute the three different estimators that we have been discussing, without explicitly controlling for or conditioning on this new covariate in any of them.  
+
+#### Estimating the Effects Without Conditioning on Covariates
 ``` {r Estimates For Scenario 3, echo = TRUE}
 
 #Create data for simulation 3
@@ -367,7 +369,7 @@ create_data_3 <- function(n.units= n_units, n.periods=n_periods) {
              TRUE ~  usa*50000
            ) +
            100000*treated + 
-           rnorm(n=1, mean =0, sd = 100000) # error w/ mean 0 & sd= 100k
+           rnorm(n=1, mean =0, sd = 75000) # error w/ mean 0 & sd= 75k
          ) 
 }
 
@@ -386,7 +388,7 @@ get_est_3 <- function(...) { # '...' must be included for map_dfr to work
 }
 
 #For reproducibility
-set.seed(123)
+set.seed(97)
 #Run simulation multiple times & save mean output.
 output <- map_dfr(1:n_sim, get_est_3) %>% #Run sim n_sim times & rbind() outputs
   group_by(term, estimator) %>%
@@ -399,20 +401,22 @@ plot_event_study(output) +
 ```
 
 
-Alas, all three estimators produce biased estimates for the effect of the technology. In the language of difference-in-differences, this is because the parallel trends assumption does not hold. The 'gap' in revenues between the treatment group and the control group would not have stayed constant in the 'post' periods if the treated group had remained untreated. Because the stores that adopt the technology are disproportionately located in the USA, the treated group would have had lower revenues in 2019, which would then have caught up in 2020 before surpassing those of the untreated group in 2021 and remaining higher in 2022 and 2023. Knowing with certainty that this is the case is the beauty of the Monte Carlo.  
+Alas, all three estimators produce biased estimates for the effect of the technology. In the language of difference-in-differences, this is because the parallel trends assumption does not hold. The 'gap' in revenues between the treatment group and the control group would not have stayed constant in the 'post' periods if the treated group had remained untreated. Because the stores that adopt the technology are disproportionately located in the USA, the treated group would have had lower revenues in 2019, which would then have caught up in 2020 before surpassing those of the untreated group in 2021 and remaining higher in 2022 and 2023. Knowing with certainty that this is the case is the beauty of the Monte Carlo simulation.  
 
-If this were a practical application, the estimates in the 'pre' periods having confidence bands that do not cross zero would give a hint that something is amiss, because this indicates that the pre-trends are not parallel. It is important to note, however, the distinction between parallel **pre**-trends and the parallel trends assumption. Parallel pre-trends are neither sufficient nor necessary for difference-in-differences or TWFE estimates to be valid. The parallel trends assumption, however, is one that the validity of these estimators very much relies on. Testing for parallel pre-trends gives us evidence that the trends between the two groups likely would have remained parallel in the post-training periods had the treated group remained untreated. However, this is not necessarily the case. One could imagine a scenario in which the trends between the two groups were parallel and then something changed post-treatment to effect the dynamics of the outcome variable differently for the treated group than the untreated group. The reverse is also possible. Even if pre-trends are not parallel, it is possible that the outcome paths would have been parallel in the post-period, absent treatment. 
+If this were a practical application, the estimates in the 'pre' periods having confidence bands that do not cross zero would give a hint that something is amiss, because this indicates that the pre-trends are not parallel. It is important to note, however, the distinction between parallel *pre*-trends and the parallel trends assumption. Parallel pre-trends are neither sufficient nor necessary for difference-in-differences or TWFE estimates to be valid. However, the parallel trends assumption is necessary for these estimators to be valid. Testing for parallel pre-trends gives us evidence that the trends between the two groups likely would have remained parallel in the post-training periods had the treated group remained untreated. However, this is not necessarily the case. One could imagine a scenario in which the trends between the two groups were parallel and then something changed post-treatment to effect the dynamics of the outcome variable differently for the treated group than the untreated group. The reverse is also possible. Even if pre-trends are not parallel, it is possible that the outcome paths would have been parallel in the post-period, absent treatment. 
 
 Callaway and Santa'Anna (2020) provide a method for conditioning on covariates that affect outcome dynamics. Specifically, the method is the doubly robust method proposed in Sant'Anna and Zhao (2020). One aspect of this method is to use inverse probability weighting to re-weight the observations in the treatment group according their covariates. Essentially, if a unit in the control group has covariate values that are more prevalent in the treatment group, they will receive a high weight, while an observation with covaraite values similar to most other control group units, it will receive a low weight. 
 
 To my knowledge, in the cases of the both TWFE and Gardner (2021), variables that have constant values within one unit across all periods cannot be controlled for explicitly because of colinearity problems. The coliniearity problems exist because in both cases, additional control variables are included in the same regression as unit-level fixed effects, which would perfectly predict any unit-level variables that do not change over time. The reason that these fixed effects do not result in unbiased estimates in this case, is that they assume that the unit level effects are, well, fixed. Therefore, we will run the Callaway and Sant'Anna estimator with conditioning on the country covariate and inspect the results.   
 
+#### Estimating the Effects Using Callaway and Sant'Anna With Conditioning on Covariates
+
 ``` {r Conditioning on Country}
 
-#A function to run a simulation 1 time and run estimators
+#A function to simulate data 1 time and run CS estimator
 get_est_cs_3 <- function(...) { # '...' must be included for map_dfr to work
   myData <- create_data_3()
-  #Run our three estimators
+  #Run our Callaway and Sant'Anna estimator
   output <- event_study(
       yname = "revenue",  
       tname = "year",       
@@ -426,7 +430,7 @@ get_est_cs_3 <- function(...) { # '...' must be included for map_dfr to work
 }
 
 #For reproducibility
-set.seed(123)
+set.seed(97)
 #Run simulation multiple times & save mean output.
 output <- map_dfr(1:n_sim, get_est_cs_3) %>% #Run sim n_sim times & rbind() outputs
   group_by(term, estimator) %>%
@@ -439,23 +443,22 @@ plot_event_study(output) +
   geom_line(aes(x = term, y=true_effect), color = "red")
 
 ```
-In this case, the covariate conditioning has resulted in unbiased estimates. Does this mean that Callaway and Santa'Anna have created the perfect estimator? Unfortunately note.  
+In this case, the covariate conditioning has resulted in unbiased estimates. Does this mean that Callaway and Santa'Anna have created the perfect estimator? Unfortunately not.  
 
 ### Covariates with Changing Values
 
-Something that people are often concerned about with difference-in-differences methods such as that of Callaway and Santa'Anna, is that the methods cannot control for variables whose values change over time. In some cases there are ways around this. For example, age changes over time, but we can still condition on it by conditioning on age at a specific date. In other cases, taking the value of a variable at a specific point in time might not work. 
+Something that people are often concerned about with difference-in-differences methods, such as that of Callaway and Santa'Anna, is that the methods cannot control for variables whose values change over time. In some cases there are ways around this. For example, age changes over time, but we can still condition on it by conditioning on age at a specific date. In other cases, taking the value of a variable at a specific point in time might not work. 
 
-It is important to point out that this is somewhat of a contentious topic. To paraphrase something Pedro Sant'Anna himself said in response to a question about this issue, if a variable changes values in a period after the unit is treated, it is not a covariate, it is an outcome. In many, if not most, cases I think that this is true. If it variable truly is an outcome, or some intermediate step in the the causal path between the treatment and the outcome variable, we certainly do not want to control for it. This would constitute a 'bad control'.  
+It is important to point out that this is somewhat of a contentious topic. To paraphrase something Pedro Sant'Anna himself said in response to a question about this issue, if a variable changes values in a period after the unit is treated, it is not a covariate, it is an outcome. In many, if not most cases, I think that this is true. If it is true, and the variable truly is an outcome, or some intermediate step in the causal path between the treatment and the dependent variable, we certainly do not want to control for it. This would constitute a 'bad control.'  
 
-Speaking within our example, say we wanted to control for the aggregate skill level of the employees at the different locations because with think that might affect revenues and be correlated with technology adoption. If adopting the new technology attracts more educated employees, which in turn increases revenues, that increase in revenues is a result of the technology adoption. Controlling for education would 'wipe out' this effect from out estimates. Simulating results for bad controls is beyond the scope of this document, but perhaps I will do a write up about them in the future.
+Speaking within our example, say we wanted to control for the aggregate education level of the employees at the different stores because we think employee education might affect revenues and be correlated with technology adoption. If adopting the new technology attracts more educated employees, which in turn increases revenues, then that increase in revenues is a result of the technology adoption. Controlling for education would 'wipe out' this effect from our estimates. Simulating results for bad controls is beyond the scope of this document, but perhaps I will do a write up about them in the future.
 
-As a counter-example, imagine that there is some sort of new policy that is being rolled out by some municipalities but not others. The policy hurts revenues at locations in these municipalities (maybe it is some sort of a 'sin' tax on our products, or a ban on a particularly effective form of marketing).Moreover, municipalities in Canada are twice as likely to introduce this policy as American municipalities. Recall that Canadian municipalities are less likely to adopt the technology, which means that this new policy variable is negatively correlated with treatment. Last, let's assume that the stores are all (or nearly all) located in different munucipalities. If municipalities were sufficiently large and locations were sufficiently plentiful that there were treated and untreated units in every municipality, one could actually arrive at an unbiased estimate by conditioning on municipality using Callaway and Sant'Anna (2020). 
+As a counter-example, imagine that there is some sort of new policy that is being rolled out by some municipalities but not others. The policy hurts revenues at stores in these municipalities (maybe it is some sort of a 'sin' tax on our products, or a ban on a particularly effective form of marketing). Moreover, stores that adopt the treatment are twice as likely to be located in municipalities that implement the policy. However, the policy is *not* implemented *because* stores there have adopted the technology. Rather, we will imgagine that there is some unobserved factor that causes an increase in the liklihood of both technology adoption on the part of the stores and implementation of the policy on the part of munuicipalities. Last, let's assume that the stores are all (or nearly all) located in different munucipalities. If municipalities were sufficiently large and locations were sufficiently plentiful that there were treated and untreated units in every municipality, one could actually arrive at an unbiased estimate by conditioning on municipality using Callaway and Sant'Anna (2020). 
 
-In this simulation revenue is determined as follows. For each store, revenue in each year is equal to one million, minus 350 000 if a location is in a municipality with the policy discussed above, plus the 100 000 treatment effect, plus an idiosyncratic error term which is drawn from random normal distribution with mean zero and a standard deviation of 100 000. The policy is introduced randomly in any of the five years or not at all. MUST RE WORD In any given year for a Canadian location, the odds of the policy being implemented by the local municipality are 1 in 10. For locations in the USA, the odds are 1 in 20.    
+In this simulation, revenue is determined as follows. For each store, revenue in each year is equal to one million, minus `r scales::dollar(250000)` if a location is in a municipality with the policy discussed above, plus the `r scales::dollar(100000)` treatment effect, plus an idiosyncratic error term which is drawn from random normal distribution with mean zero and a standard deviation of 75 000. The policy is introduced randomly in any of the five years or not at all. The odds that the municipality of a store that adopts the technology introduced the policy in any of the five years is 1/10, while the odds for any given year for stores that do not adopt the policy is 1/20 .    
 
+#### Estimating Effects Without Conidtioning on any Covariates
 ```{r Covariates With Changing Values}
-
-
 
 #Create data for simulation 3
 create_data_4 <- function(n.units= n_units, n.periods=n_periods) { 
@@ -475,12 +478,9 @@ create_data_4 <- function(n.units= n_units, n.periods=n_periods) {
     id %in% ((n.units/2+n.units*2/(n.periods-1)/2+1):(n.units/2+n.units*3/(n.periods-1)/2)) ~ 2022,
     TRUE ~ 2023
     ), 
-         usa = case_when(g == 0 ~ sample(c(0,0,0,1),1),
-                         TRUE ~ sample(c(0,1,1,1),1)
-                         ), #American locations thrice as likely to be treated
          policy_year = case_when(
-                                 usa == 1 ~ sample(c(2019,2020,2021,2022,2023, rep(0,15)),1),
-                                 usa == 0 ~ sample(c(2019,2020,2021,2022,2023, rep(0,5)),1)
+                                 g == 0 ~ sample(c(2019,2020,2021,2022,2023, rep(0,15)),1), #each year 1/20
+                                 TRUE ~ sample(c(2019,2020,2021,2022,2023, rep(0,5)),1) #each year 1/10
                                  )
   ) %>%
   rowwise() %>%
@@ -489,9 +489,9 @@ create_data_4 <- function(n.units= n_units, n.periods=n_periods) {
          policy = case_when(policy_year<=year & policy_year !=0 ~ 1,
                             TRUE ~ 0),
          revenue = 1000000
-                   + policy * -350000
+                   + policy * -250000
                    + treated * 100000
-                   + rnorm(n=1, mean =0, sd = 100000) # error w/ mean 0 & sd= 100k
+                   + rnorm(n=1, mean =0, sd = 75000) # error w/ mean 0 & sd= 75k
          ) 
 }
 
@@ -509,7 +509,7 @@ get_est_4 <- function(...) { # '...' must be included for map_dfr to work
 output <- get_est_4()
 
 #For reproducibility
-set.seed(123)
+set.seed(97)
 #Run simulation multiple times & save mean output.
 output <- map_dfr(1:n_sim, get_est_4) %>% #Run sim n_sim times & rbind() outputs
   group_by(term, estimator, conditioning) %>%
@@ -518,14 +518,26 @@ output <- map_dfr(1:n_sim, get_est_4) %>% #Run sim n_sim times & rbind() outputs
 #Plot results w/o conditioning in policy variable
 plot_event_study(filter(output, conditioning == 0)) +
   geom_line(aes(x = term,  y=true_effect), color = "red")
+```
 
+#### Estimating Effects With Conidtioning on Covariates With Changing Values
+``` {r with conditioning}
 #Plot results w/ conditioning in policy variable
 plot_event_study(filter(output, conditioning == 1)) +
   geom_line(aes(x = term,  y=true_effect), color = "red")
 
 ```
+Of course, when we do not condition on / control for the policy covariate we get biased estimates from all three methods. TWFE and Garder (2021) both allow us to control for this sort of covaraite, while Callway and Sant'Anna (2021) does not. 
 
-### Treatment that 'Switches Off'
+### Conclusion
+
+In this document, we have explored how the TWFE, Gardner (2021) and Callaway and Sant'Anna (2021) estimators behave (or misbehave) in a variety of circumstances. First, we showed that when treatment effects are heterogeneous, TWFE will produce biased estimates, while the other two estimators can produce unbiased estimators. Next, we illustrated that if covariates exist that have fixed values but still effect the dynamics of the dependent variable (ie, their effects change over time), both Gardner (2021) and TWFE will produce biased estimates, while the Callaway and Sant'Anna (2021) estimator can produce unbiased estimates if we condition on those covariates. Last, we saw that Gardner (2021) and TWFE can control for covariates whose values change over time, while Callaway and Sant'Anna (2021) cannot. Of course, TWFE still requires homogeneous effects in this scenario.
+
+Clearly, I have brushed over multiple assumptions and potential pitfalls with each of these estimators. The purpose of this was not to give a comprehensive overview of these methods, but rather to give a glimpse of some of the practical differences between them and some basic examples of scenarios in which one or two of the methods might be more appropriate than the other(s). For a more comprehensive understanding of these methods I suggest not only reading the Gardner (2021) and Callaway and Sant'Anna (2021) papers, but also looking at some of the documentation for the {did} and {did2s} R packages. The vignette https://cran.r-project.org/web/packages/did/vignettes/TWFE.html, for example, gives a very approachable overview of some issues with TWFE estimators and how Callaway and Sant'Anna remedy such problems with their estimator. I also recommend Scott Cunningham's Substack (https://causalinf.substack.com/) for discussions about all things causal inference. 
+
+I created this document independently out of my own interest. If you think it is useful, feel free to share it with others. If you think that there are flaws, feel free to reach out to me.
+
+
 
 
 
