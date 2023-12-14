@@ -90,9 +90,9 @@ I find simulation-based explanations easier to follow when they are explained in
 
 ``` {r set parameters}
 #Set number of units, periods and simulations
-n_units <- 2000
+n_units <- 1000
 n_periods <- 5
-n_sim <- 50
+n_sim <- 5
 
 ```
 
