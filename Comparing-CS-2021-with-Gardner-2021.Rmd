@@ -377,7 +377,8 @@ output <- map_dfr(1:n_sim, get_est_2) %>% #Run sim n_sim times & rbind() outputs
   summarise(across(everything(), mean))
 
 #Plot the results
-my_event_plot(output)
+plot_event_study(output) + 
+  geom_line(aes(x = term, y=true_effect), color = "red")
 
 ```
 Above, we see the well-established result that TWFE yields biased estimates when treatment effects are not homogeneous. This issue is solved by the methods of Callaway and Sant'Anna (2021) and @gardner2022two. 
@@ -456,7 +457,9 @@ output <- map_dfr(1:n_sim, get_est_3) %>% #Run sim n_sim times & rbind() outputs
   group_by(term, estimator) %>%
   summarise(across(everything(), mean))
 
-my_event_plot(output)
+plot_event_study(output) + 
+  geom_line(aes(x = term, y=true_effect), color = "red")
+
 
 ```
 
@@ -499,7 +502,8 @@ output <- map_dfr(1:n_sim, get_est_cs_3) %>% #Run sim n_sim times & rbind() outp
 #Add column for true effect to DF of estimates
 output <- left_join(output, true_effect, by = "term")
 
-my_event_plot(output)
+plot_event_study(output) + 
+  geom_line(aes(x = term, y=true_effect), color = "red")
 
 ```
 In this case, the covariate conditioning has resulted in unbiased estimates. Does this mean that Callaway and Santa'Anna have created the perfect estimator? Unfortunately not.  
@@ -575,13 +579,15 @@ output <- map_dfr(1:n_sim, get_est_4) %>% #Run sim n_sim times & rbind() outputs
   summarise(across(everything(), mean))
 
 #Plot results w/o conditioning in policy variable
-my_event_plot(filter(output, conditioning == 0))
+plot_event_study(filter(output, conditioning == 0)) +
+  geom_line(aes(x = term,  y=true_effect), color = "red")
 ```
 
 #### Estimating Effects *With* Conidtioning on Covariates With Changing Values
 ``` {r with conditioning}
 #Plot results w/ conditioning in policy variable
-my_event_plot(filter(output, conditioning == 1)) 
+plot_event_study(filter(output, conditioning == 1)) +
+  geom_line(aes(x = term,  y=true_effect), color = "red")
 
 ```
 Of course, when we do not condition on / control for the policy covariate we get biased estimates from all three methods. TWFE and Garder (2021) both allow us to control for this sort of covaraite, while @CALLAWAY2021200 does not. 
