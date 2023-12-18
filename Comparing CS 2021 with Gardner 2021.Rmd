@@ -7,6 +7,7 @@ output:
     code_folding: hide
     toc: true
     toc_float: false
+bibliography: references.bib  
 ---
 
 ```{r setup, include=TRUE, message=FALSE, warning=FALSE}
@@ -76,22 +77,22 @@ my_event_study <- function(data, xformla = NULL, true_effect) {
 
 ## Introduction
 
-In my day job, I do a fair bit of work in the realm of causal inference. Typically, this involves looking at whether a particular policy resulted in improved outcomes for individuals who experienced the policy. There are many different ways of doing this. One of the most common methods, or groups of methods, is difference-in-differences (DiD). DiD methods have been advancing rapidly in recent years following the discovery of a number of issues with two-way fixed effects estimators (see Borusyak and Jaravel (2018), de Chaisemartin and D'Haultfoeuille (2020), Goodman-Bacon (2021), and Sun and Abraham (2021). See Roth (2023) for a synthesis of the literature).
+In my day job, I do a fair bit of work in the realm of causal inference. Typically, this involves looking at whether a particular policy resulted in improved outcomes for individuals who experienced the policy. There are many different ways of doing this. One of the most common methods, or groups of methods, is difference-in-differences (DiD). DiD methods have been advancing rapidly in recent years following the discovery of a number of issues with two-way fixed effects estimators (see @borusyak2018revisiting, @de2020two, @goodman2021difference, and @sun2021estimating. See @roth2023s for a synthesis of the literature).
 
-Recently, I have been exploring how different variations of DiD estimators that allow for staggered adoption behave under different circumstances. The {did2s} and {did} packages in R make this relatively easy to do with Monte Carlo simulations. While I have explored other estimators as well, in this post I wish to focus on two in particular. These two are the estimators proposed in Gardner (2021), and Callaway and Sant'Anna (2020). I will not be providing any analytical proofs or getting into any of the math behind how these to methods work. Rather, I will be illustrating with Monte Carlo simulations how these estimators behave (or misbehave) given different types of treatment effects and covariates. I will also be comparing them to the classic two-way fixed effects estimator. 
+Recently, I have been exploring how different variations of DiD estimators that allow for staggered adoption behave under different circumstances. The {did2s} and {did} packages in R make this relatively easy to do with Monte Carlo simulations. While I have explored other estimators as well, in this post I wish to focus on two in particular. These two are the estimators proposed in @gardner2022two, and @CALLAWAY2021200. I will not be providing any analytical proofs or getting into any of the math behind how these to methods work. Rather, I will be illustrating with Monte Carlo simulations how these estimators behave (or misbehave) given different types of treatment effects and covariates. I will also be comparing them to the classic two-way fixed effects estimator. 
 
 ## Simulations
 
 ``` {r set parameters}
 #Set number of units, periods and simulations.
   #Applies to all scenarios
-n_units <- 1000
+n_units <- 80
 n_periods <- 5
-n_sim <- 10
+n_sim <- 1
 
 ```
 
-I find simulation-based explanations easier to follow when they are explained in terms of hypothetical real world scenarios and the variables are given realistic values and names. For this simulation, let us imagine that a large company with many locations wants to measure whether adoption of a particular technology improves sales. Some of this company's locations have adopted the technology, while others have not. Furthermore, the locations that have adopted the technology have adopted it at different times and have chosen to adopt it of their own volition, which means that the treatment is not randomly assigned. We shall explore how we might measure the effects of the technology on sales using the methods of Callaway and Sant'Anna (2021), Gardner (2021), and Two-Way Fixed Effects, hereafter referred to as TWFE.
+I find simulation-based explanations easier to follow when they are explained in terms of hypothetical real world scenarios and the variables are given realistic values and names. For this simulation, let us imagine that a large company with many locations wants to measure whether adoption of a particular technology improves sales. Some of this company's locations have adopted the technology, while others have not. Furthermore, the locations that have adopted the technology have adopted it at different times and have chosen to adopt it of their own volition, which means that the treatment is not randomly assigned. We shall explore how we might measure the effects of the technology on sales using the methods of Callaway and Sant'Anna (2021), @gardner2022two, and Two-Way Fixed Effects, hereafter referred to as TWFE.
 
 ### Homogeneous Treatment and Covariates with Fixed Effects
 
@@ -318,7 +319,7 @@ plot_event_study(output) +
   geom_line(aes(x = term, y=true_effect), color = "red")
 
 ```
-Above, we see the well-established result that TWFE yields biased estimates when treatment effects are not homogeneous. This issue is solved by the methods of Callaway and Sant'Anna (2021) and Gardner (2021). 
+Above, we see the well-established result that TWFE yields biased estimates when treatment effects are not homogeneous. This issue is solved by the methods of Callaway and Sant'Anna (2021) and @gardner2022two. 
 
 
 ### Covariates with Dynamic Effects
@@ -407,7 +408,7 @@ If this were a practical application, the estimates in the 'pre' periods having 
 
 Callaway and Santa'Anna (2021) provides a method for conditioning on covariates that affect outcome dynamics. Specifically, the method is the doubly robust method proposed in Sant'Anna and Zhao (2020). One aspect of this method is to use inverse probability weighting to re-weight the observations in the treatment group according their covariates. Essentially, if a unit in the control group has covariate values that are more prevalent in the treatment group, they will receive a high weight, while an observation with covaraite values similar to most other control group units, it will receive a low weight. 
 
-To my knowledge, in the cases of the both TWFE and Gardner (2021), variables that have constant values within one unit across all periods cannot be controlled for explicitly because of colinearity problems. The coliniearity problems exist because in both cases, additional control variables are included in the same regression as unit-level fixed effects, which would perfectly predict any unit-level variables that do not change over time. The reason that these fixed effects do not result in unbiased estimates in this case is that they assume that the unit level effects are, well, fixed. Therefore, we will run the Callaway and Sant'Anna estimator with conditioning on the country covariate and inspect the results.   
+To my knowledge, in the cases of the both TWFE and @gardner2022two, variables that have constant values within one unit across all periods cannot be controlled for explicitly because of colinearity problems. The coliniearity problems exist because in both cases, additional control variables are included in the same regression as unit-level fixed effects, which would perfectly predict any unit-level variables that do not change over time. The reason that these fixed effects do not result in unbiased estimates in this case is that they assume that the unit level effects are, well, fixed. Therefore, we will run the Callaway and Sant'Anna estimator with conditioning on the country covariate and inspect the results.   
 
 #### Estimating the Effects Using Callaway and Sant'Anna With Conditioning on Covariates
 
@@ -453,9 +454,9 @@ It is important to point out that this is somewhat of a contentious topic. To pa
 
 Speaking within our example, say we wanted to control for the aggregate education level of the employees at the different stores because we think employee education might affect revenues and be correlated with technology adoption. If adopting the new technology attracts more educated employees, which in turn increases revenues, then that increase in revenues is a result of the technology adoption. Controlling for education would 'wipe out' this effect from our estimates. Simulating results for bad controls is beyond the scope of this document, but perhaps I will do a write up about them in the future.
 
-As a counter-example, imagine that there is some sort of new policy that is being rolled out by some municipalities but not others. The policy hurts revenues at stores in these municipalities (maybe it is some sort of a 'sin' tax on our products, or a ban on a particularly effective form of marketing). Moreover, stores that adopt the treatment are twice as likely to be located in municipalities that implement the policy. However, the policy is *not* implemented *because* stores there have adopted the technology. Rather, we will imgagine that there is some unobserved factor that causes an increase in the liklihood of both technology adoption on the part of the stores and implementation of the policy on the part of munuicipalities. Last, let's assume that the stores are all (or nearly all) located in different munucipalities. If municipalities were sufficiently large and locations were sufficiently plentiful that there were treated and untreated units in every municipality, one could actually arrive at an unbiased estimate by conditioning on municipality using Callaway and Sant'Anna (2021). 
+As a counter-example, imagine that there is some sort of new policy that is being rolled out by some municipalities but not others. The policy hurts revenues at stores in these municipalities (maybe it is some sort of a 'sin' tax on our products, or a ban on a particularly effective form of marketing). Moreover, stores that adopt the treatment are twice as likely to be located in municipalities that implement the policy. However, the policy is not implemented *because* stores there have adopted the technology. Rather, we will imgagine that there is some unobserved factor that causes an increase in the liklihood of both technology adoption on the part of the stores and implementation of the policy on the part of munuicipalities. Last, let's assume that the stores are all (or nearly all) located in different munucipalities. If municipalities were sufficiently large and locations were sufficiently plentiful that there were treated and untreated units in every municipality, one could actually arrive at an unbiased estimate by conditioning on municipality using Callaway and Sant'Anna (2021). 
 
-In this scenario, revenue is determined as follows. For each store, revenue in each year is equal to one million, minus `r scales::dollar(250000)` if a location is in a municipality with the policy discussed above, plus the `r scales::dollar(100000)` treatment effect, plus an idiosyncratic error term which is drawn from random normal distribution with mean zero and a standard deviation of `$75,000`. The policy is introduced randomly in any of the five years or not at all. The odds that the municipality of a store that adopts the technology introduced the policy in any of the five years is 1/10, while the odds for any given year for stores that do not adopt the policy is 1/20 .    
+In this scenario, revenue is determined as follows. For each store, revenue in each year is equal to one million, minus `r scales::dollar(250000)` if a location is in a municipality with the policy discussed above, plus the `r scales::dollar(100000)` treatment effect, plus an idiosyncratic error term which is drawn from random normal distribution with mean zero and a standard deviation of `r scales::dollar(75000)`. The policy is introduced randomly in any of the five years or not at all. The odds that the municipality of a store that adopts the technology introduced the policy in any of the five years is 1/10, while the odds for any given year for stores that do not adopt the policy is 1/20 .    
 
 #### Estimating Effects *Without* Conidtioning on any Covariates
 ```{r Covariates With Changing Values}
@@ -527,17 +528,17 @@ plot_event_study(filter(output, conditioning == 1)) +
   geom_line(aes(x = term,  y=true_effect), color = "red")
 
 ```
-Of course, when we do not condition on / control for the policy covariate we get biased estimates from all three methods. TWFE and Garder (2021) both allow us to control for this sort of covaraite, while Callway and Sant'Anna (2021) does not. 
+Of course, when we do not condition on / control for the policy covariate we get biased estimates from all three methods. TWFE and Garder (2021) both allow us to control for this sort of covaraite, while @CALLAWAY2021200 does not. 
 
-### Conclusion
+## Conclusion
 
-In this document, we have explored how the TWFE, Gardner (2021), and Callaway and Sant'Anna (2021) estimators behave (or misbehave) in a variety of circumstances. First, we showed that when treatment effects are heterogeneous, TWFE will produce biased estimates, while the other two estimators can produce unbiased estimates. Next, we illustrated that if covariates exist that have fixed values but still effect the dynamics of the dependent variable (ie, their effects change over time), both Gardner (2021) and TWFE will produce biased estimates, while the Callaway and Sant'Anna (2021) estimator can produce unbiased estimates if we condition on those covariates. Last, we saw that Gardner (2021) and TWFE can control for covariates whose values change over time, while Callaway and Sant'Anna (2021) cannot. Of course, TWFE still requires homogeneous effects in this scenario.
+In this document, we have explored how the TWFE, @gardner2022two, and Callaway and Sant'Anna (2021) estimators behave (or misbehave) in a variety of circumstances. First, we showed that when treatment effects are heterogeneous, TWFE will produce biased estimates, while the other two estimators can produce unbiased estimates. Next, we illustrated that if covariates exist that have fixed values but still effect the dynamics of the dependent variable (ie, their effects change over time), both @gardner2022two and TWFE will produce biased estimates, while the Callaway and Sant'Anna (2021) estimator can produce unbiased estimates if we condition on those covariates. Last, we saw that @gardner2022two and TWFE can control for covariates whose values change over time, while Callaway and Sant'Anna (2021) cannot. Of course, TWFE still requires homogeneous effects in this scenario.
 
-Clearly, I have brushed over multiple assumptions and potential pitfalls with each of these estimators. The purpose of this was not to give a comprehensive overview of these methods, but rather to give a glimpse of some of the practical differences between them and some basic examples of scenarios in which one or two of the methods might be more appropriate than the other(s). For a more comprehensive understanding of these methods I suggest not only reading the Gardner (2021) and Callaway and Sant'Anna (2021) papers, but also looking at some of the documentation for the {did} and {did2s} R packages. The vignette https://cran.r-project.org/web/packages/did/vignettes/TWFE.html, for example, gives a very approachable overview of some issues with TWFE estimators and how Callaway and Sant'Anna remedy such problems with their estimator. I also recommend Scott Cunningham's Substack (https://causalinf.substack.com/) for discussions about all things causal inference. 
+Clearly, I have brushed over multiple assumptions and potential pitfalls with each of these estimators. The purpose of this was not to give a comprehensive overview of these methods, but rather to give a glimpse of some of the practical differences between them and some basic examples of scenarios in which one or two of the methods might be more appropriate than the other(s). For a more comprehensive understanding of these methods I suggest not only reading the @gardner2022two and Callaway and Sant'Anna (2021) papers, but also looking at some of the documentation for the {did} and {did2s} R packages. The vignette https://cran.r-project.org/web/packages/did/vignettes/TWFE.html, for example, gives a very approachable overview of some issues with TWFE estimators and how Callaway and Sant'Anna remedy such problems with their estimator. I also recommend Dr. Scott Cunningham's Substack (https://causalinf.substack.com/) for discussions about all things causal inference. 
 
-I created this document independently out of my own interest. If you think it is useful, feel free to share it with others. If you think that there are flaws, feel free to reach out to me at g.vandervinne1@gmail.com .
+I created this document independently out of my own interest. If you think it is useful, feel free to share it with others. If you think that there are flaws, feel free to reach out to me at `g.vandervinne1@gmail.com`.
 
-
+## References
 
 
 
