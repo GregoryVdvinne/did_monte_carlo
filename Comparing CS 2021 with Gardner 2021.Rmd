@@ -19,7 +19,11 @@ bibliography: references.bib
 
 #Overlap condition for Gardner?
 #Check in the software uses group or unit fixed effects for Gardner?
-
+#https://www.youtube.com/watch?v=6mVfQkmpghY
+  #See 40:00. Says controls assume away covariate-specifc trends
+   #Says might be better to interact with time periods
+     #Still more parametric than CS
+  #43:00 discusses time-varying covariates adn even mentions CS's exclusion of them
 
 ##Setup
 
