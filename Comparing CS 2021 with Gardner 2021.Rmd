@@ -11,6 +11,16 @@ bibliography: references.bib
 ---
 
 ```{r setup, include=TRUE, message=FALSE, warning=FALSE}
+#If covariate that changes is a dummy, you could introduce dummies for policy*period_introduced and use in CS... I think. 
+  #If it is continuous, I don't think this is possible.
+  #See 45:00 in https://www.youtube.com/watch?v=VLviaylakAo
+    #Pedro Sant'Anna says you can 'hack' the software, but he doesn't want people doing it.
+  #Mention that adding covariates is a sword that cuts both ways. Introducing more increases the viability of parallel trends, but weakens the overlap condition - you start predicting treatment really well. 
+
+#Overlap condition for Gardner?
+#Check in the software uses group or unit fixed effects for Gardner?
+
+
 ##Setup
 
 #Clear memory
@@ -21,13 +31,14 @@ rm(list = ls(all=T))
 if (!require("pacman")) install.packages("pacman")
 pacman::p_load(
   
-  tidyverse,   # Grammar for data + ggplot2
-  did,         # Callaway and Sant'Anna
-  did2s,       # Gardner
-  data.table,  # easy to make data tables
-  knitr,       # Print pretty tables
-  ggtext,      # Fancy ggplot text (e.g. italics)
-  RColorBrewer # colour palettes
+  tidyverse,    # Grammar for data + ggplot2
+  did,          # Callaway and Sant'Anna
+  did2s,        # Gardner
+  data.table,   # Easy to make data tables
+  knitr,        # Print pretty tables
+  ggtext,       # Fancy ggplot text (e.g. italics)
+  RColorBrewer, # Colour palettes
+  fastDummies   # Easy to make dummy variables
 )
 
 #Set some output options
@@ -111,14 +122,14 @@ my_event_plot <-  function(data, plot_title = "") {
       theme(
             axis.line = element_line(color="grey"),
             axis.ticks = element_line(color = "grey"),
-            axis.title.y = element_text(margin = margin(0,12,0,6),
+            axis.title.y = element_text(margin = margin(0,12,0,0),
                                         size = 12, 
                                         color = "grey30"),
             axis.title.x = element_text(margin = margin(12,0,6,0),
                                         size = 12, 
                                         color = "grey30"),
             axis.text = element_text(color = "grey30"),
-            legend.position = c(0.175,1.15),
+            legend.position = c(0.171,1.15),
             legend.direction = "horizontal",
             legend.margin = margin(0),
             legend.text = element_text(size = 12),
@@ -130,7 +141,11 @@ my_event_plot <-  function(data, plot_title = "") {
             strip.background = element_blank(),
             plot.title = element_textbox_simple(margin = margin(6,0,18,0),
                                       size = 16
-              )
+              ),
+            plot.caption = element_textbox_simple(margin = margin(6,0,6,0),
+                                                  size = 8,
+                                                  color = "grey30"),
+            plot.caption.position = "plot"
             )
 }
 
@@ -152,7 +167,7 @@ Recently, I have been exploring how different variations of DiD estimators that 
   #Applies to all scenarios
 n_units <- 1000 
 n_periods <- 5
-n_sim <- 10
+n_sim <- 5
 
 ```
 
@@ -431,8 +446,9 @@ create_data_3 <- function(n.units= n_units, n.periods=n_periods) {
              TRUE ~  usa*50000
            ) +
            100000*treated + 
-           rnorm(n=1, mean =0, sd = 75000) # error w/ mean 0 & sd= 75k
-         ) 
+           rnorm(n=1, mean =0, sd = 75000), # error w/ mean 0 & sd= 75k
+         usa_year = factor(usa*year)
+         )
 }
 
 #Save true effect
@@ -468,7 +484,13 @@ If this were a practical application, the estimates in the 'pre' periods having 
 
 Callaway and Santa'Anna (2021) provides a method for conditioning on covariates that affect outcome dynamics. Specifically, the method is the doubly robust method proposed in Sant'Anna and Zhao (2020). One aspect of this method is to use inverse probability weighting to re-weight the observations in the treatment group according their covariates. Essentially, if a unit in the control group has covariate values that are more prevalent in the treatment group, they will receive a high weight, while an observation with covaraite values similar to most other control group units, it will receive a low weight. 
 
-To my knowledge, in the cases of the both TWFE and @gardner2022two, variables that have constant values within one unit across all periods cannot be controlled for explicitly because of colinearity problems. The coliniearity problems exist because in both cases, additional control variables are included in the same regression as unit-level fixed effects, which perfectly predict any unit-level variables that do not change over time. The reason that these fixed effects do not result in unbiased estimates in this case is that they 'assume' that the unit level effects are, well, fixed. Therefore, we will run the Callaway and Sant'Anna estimator with conditioning on the country covariate and inspect the results.   
+In the cases of the both TWFE and @gardner2022two, covariates that have constant values within one unit across all periods cannot be controlled for simply by introducing those covariates themselves because of colinearity problems. The coliniearity problems exist because in both cases, additional control variables are included in the same regression as unit-level fixed effects, which perfectly predict any unit-level variables that do not change over time. The reason that these fixed effects do not result in unbiased estimates in this case is that they 'assume' that the unit level effects are, well, fixed. Therefore, we will run the Callaway and Sant'Anna estimator with conditioning on the country covariate, but we will need to do something a little more tricky for the other two methods. 
+
+For Garnder and TWFE, we can control for time-constant covariates that effect the dynamics of the outcome by interacting the time-constant covariate with period dummies. THe results below will show that this works, but I am not convinced that it is all that practical. In the case of Callaway and Sant'Anna, we condition time-constant covariates that we think may be associated with the dynamics of the outcome in order to improve the viability of the parallel trends assumption. However, introducing more covariates weakens the overlap condition, so it is a double edged sword.
+
+CHECK ON THE FOLLOWING
+
+In the cases of 
 
 
 ``` {r Conditioning on Country}
@@ -485,7 +507,28 @@ get_est_cs_3 <- function(...) { # '...' must be included for map_dfr to work
       estimator = "did",
       xformla = ~ usa,
       data = myData
+      ) %>%
+    rbind(
+        event_study(
+        yname = "revenue",  
+        tname = "year",       
+        idname = "id",        
+        gname = "g",
+        estimator = "did2s",
+        xformla = ~ factor(usa_year),
+        data = myData
+      ),
+      event_study(
+        yname = "revenue",  
+        tname = "year",       
+        idname = "id",        
+        gname = "g",
+        estimator = "TWFE",
+        xformla = ~ factor(usa_year),
+        data = myData
       )
+      
+    )
   output
 }
 
@@ -500,11 +543,11 @@ output <- map_dfr(1:n_sim, get_est_cs_3) %>% #Run sim n_sim times & rbind() outp
 output <- left_join(output, true_effect, by = "term")
 
 my_event_plot(output,
-              plot_title = "Estimating the Effects Using Callaway and Sant'Anna <i>With</i> Conditioning on Covariates") + 
-  theme(strip.text = element_blank(),
-        legend.position = c(0.0375, 1.065))
+              plot_title = "Estimating the Effects <i>With</i> Conditioning on Covariates*") + 
+  labs(caption = "*For Callaway and Sant'Anna, we condition on the time-constant covariate itself. For the other two, we condition on interactions between the time-constant covariate and period dummies.")
 
 ```
+
 In this case, the covariate conditioning has resulted in unbiased estimates. Does this mean that Callaway and Santa'Anna have created the perfect estimator? Unfortunately not.  
 
 ### Covariates with Changing Values
