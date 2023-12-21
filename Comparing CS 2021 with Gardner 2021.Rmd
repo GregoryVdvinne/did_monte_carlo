@@ -133,7 +133,7 @@ my_event_plot <-  function(data, plot_title = "") {
                                         size = 12, 
                                         color = "grey30"),
             axis.text = element_text(color = "grey30"),
-            legend.position = c(0.171,1.15),
+            legend.position = c(0.18,1.15),
             legend.direction = "horizontal",
             legend.margin = margin(0),
             legend.text = element_text(size = 12),
@@ -143,7 +143,7 @@ my_event_plot <-  function(data, plot_title = "") {
                                       size = 12,
                                       color = "grey30"),
             strip.background = element_blank(),
-            plot.title = element_textbox_simple(margin = margin(6,0,18,0),
+            plot.title = element_textbox_simple(margin = margin(6,12,18,0),
                                       size = 16
               ),
             plot.caption = element_textbox_simple(margin = margin(6,0,6,0),
@@ -162,7 +162,7 @@ my_event_plot <-  function(data, plot_title = "") {
 
 In my day job, I do a fair bit of work in the realm of causal inference. Typically, this involves looking at whether a particular policy resulted in improved outcomes for individuals who experienced the policy. There are many different ways of doing this. One of the most common methods, or groups of methods, is difference-in-differences (DiD). DiD methods have been advancing rapidly in recent years following the discovery of a number of issues with two-way fixed effects estimators (see @borusyak2018revisiting, @de2020two, @goodman2021difference, and @sun2021estimating. See @roth2023s for a synthesis of the literature).
 
-Recently, I have been exploring how different variations of DiD estimators that allow for staggered adoption behave under different circumstances. The {did2s} and {did} packages in R make this relatively easy to do with Monte Carlo simulations. While I have explored other estimators as well, in this post I wish to focus on two in particular. These two are the estimators proposed in @gardner2022two, and @CALLAWAY2021200. I will not be providing any analytical proofs or getting into any of the math behind how these to methods work. Rather, I will be illustrating with Monte Carlo simulations how these estimators behave (or misbehave) given different types of treatment effects and covariates. I will also be comparing them to the classic two-way fixed effects estimator. I explain the data generating process (DGP) for each scenario in plain English rather than with equations. The DGP can also be deciphered by reading the R code. 
+Recently, I have been exploring how different variations of DiD estimators that allow for staggered adoption behave under different circumstances. The {did2s} and {did} packages in R make this relatively easy to do with Monte Carlo simulations. In this piece, I focus on the implementation of two estimators in particular. These two are the estimators proposed in @gardner2022two, and @CALLAWAY2021200. I will not be providing any analytical proofs or getting into the math behind how these two methods work. Rather, I will be illustrating with Monte Carlo simulations how these estimators behave (or misbehave) given different types of treatment effects and covariates and how the aforementioned R package allow us to implement the methods. I will also be comparing them to the classic two-way fixed effects estimator. I explain the data generating process (DGP) for each scenario in plain English rather than with equations. The DGP can also be deciphered by reading the R code. 
 
 ## Simulations
 
@@ -171,7 +171,7 @@ Recently, I have been exploring how different variations of DiD estimators that 
   #Applies to all scenarios
 n_units <- 1000 
 n_periods <- 5
-n_sim <- 5
+n_sim <- 10
 
 ```
 
@@ -400,7 +400,7 @@ my_event_plot(output,
               plot_title = "Estimating the Effects When Treatment Effects are Heterogeneous")
 
 ```
-Above, we see the well-established result that TWFE yields biased estimates when treatment effects are not homogeneous. This issue is solved by the methods of @CALLAWAY2021200 and @gardner2022two. 
+Above, we see the well-established result that TWFE yields biased estimates when treatment effects are not homogeneous. This issue is solved by the methods of @CALLAWAY2021200 and @gardner2022two. It is also interesting to note that the estimates in the periods before treatment should be centered on zero in this case because we know that parallel trends does hold. However, TWFE yields non-zero esitmates, incorrectly suggesting that parallel trends does not hold. This is established in @sun2021estimating. TWFE failing in the presence of heterogeneous treatment effects is a significant issue because in real applications treatment effects are very unlikely to be homogeneous. For that reason, one should use methods that allow for heterogeneous effects, such as those of @CALLAWAY2021200 and @gardner2022two whenever possible.
 
 
 ### Covariates with Dynamic Effects
@@ -488,13 +488,9 @@ If this were a practical application, the estimates in the 'pre' periods having 
 
 Callaway and Santa'Anna (2021) provides a method for conditioning on covariates that affect outcome dynamics. Specifically, the method is the doubly robust method proposed in Sant'Anna and Zhao (2020). One aspect of this method is to use inverse probability weighting to re-weight the observations in the treatment group according their covariates. Essentially, if a unit in the control group has covariate values that are more prevalent in the treatment group, they will receive a high weight, while an observation with covaraite values similar to most other control group units, it will receive a low weight. 
 
-In the cases of the both TWFE and @gardner2022two, covariates that have constant values within one unit across all periods cannot be controlled for simply by introducing those covariates themselves because of colinearity problems. The coliniearity problems exist because in both cases, additional control variables are included in the same regression as unit-level fixed effects, which perfectly predict any unit-level variables that do not change over time. The reason that these fixed effects do not result in unbiased estimates in this case is that they 'assume' that the unit level effects are, well, fixed. Therefore, we will run the Callaway and Sant'Anna estimator with conditioning on the country covariate, but we will need to do something a little more tricky for the other two methods. 
+In the cases of the both TWFE and @gardner2022two, time-constant covariates that effect the dynamics of the outcome cannot be controlled for simply by introducing those covariates into the regression(s). The reason that unit or group fixed effects do not result in unbiased estimates when such covariates are present is that  they 'assume' that the unit level effects are, well, fixed (over time). Therefore, we will run the Callaway and Sant'Anna estimator with conditioning on the country covariate, but we will need to do something a little more creative for the other two methods. 
 
-For Garnder and TWFE, we can control for time-constant covariates that effect the dynamics of the outcome by interacting the time-constant covariate with period dummies. THe results below will show that this works, but I am not convinced that it is all that practical. In the case of Callaway and Sant'Anna, we condition time-constant covariates that we think may be associated with the dynamics of the outcome in order to improve the viability of the parallel trends assumption. However, introducing more covariates weakens the overlap condition, so it is a double edged sword.
-
-CHECK ON THE FOLLOWING
-
-In the cases of 
+For Garnder and TWFE, we can control for time-constant covariates that effect the dynamics of the outcome by interacting the time-constant covariates with period dummies. The results below will show that this works, but I am not convinced that it is terribly practical. In the case of Callaway and Sant'Anna, we condition time-constant covariates that we think may be associated with the dynamics of the outcome in order to improve the viability of the parallel trends assumption. However, introducing more covariates weakens the overlap condition, so it is a double edged sword. Introducing period*covariate interaction terms in @gardner2022two and TWFE may have even more negative reproductions because doing so can use up a lot of degrees of freedom, especially when a panel has many periods and few units.  
 
 
 ``` {r Conditioning on Country}
@@ -554,15 +550,15 @@ my_event_plot(output,
 
 In this case, the covariate conditioning has resulted in unbiased estimates. Does this mean that Callaway and Santa'Anna have created the perfect estimator? Unfortunately not.  
 
-### Covariates with Changing Values
+### Time-Varying Covariates
 
-Something that people are often concerned about with difference-in-differences methods, such as that of Callaway and Santa'Anna, is that the methods cannot control for covariates whose values change over time. In some cases there are ways around this. For example, a person's age changes over time, but we can still condition on it by conditioning on age at a specific date. In other cases, taking the value of a variable at a specific point in time does not work. 
+Something that people are often concerned about with difference-in-differences methods, such as that of Callaway and Santa'Anna, is that the methods cannot control for time-varying covariates. In some cases there are ways around this. For example, a person's age changes over time, but we can still condition on it by conditioning on age at a specific date. In other cases, taking the value of a variable at a specific point in time does not work. 
 
-It is important to point out that this is somewhat of a contentious topic. To paraphrase something Pedro Sant'Anna himself said in response to a question about this issue, if a variable changes values in a period after the unit is treated, that variable is not a covariate, it is an outcome. In many, if not most cases, I think that this is true. If the variable truly is an outcome, or some intermediate step in the causal path between the treatment and the dependent variable, we certainly do not want to control for it. This would constitute a 'bad control.'  
+It is important to point out that this is somewhat of a contentious topic. To paraphrase something Pedro Sant'Anna said in response to a question about this issue, if a variable changes values in a period after the unit is treated, that variable is not a covariate, it is an outcome. In many, if not most cases, I think that this is true. If the variable truly is an outcome, or some intermediate step in the causal path between the treatment and the dependent variable, we certainly do not want to control for it. This would constitute a 'bad control.'   
 
-Speaking within our example, say we wanted to control for the aggregate education level of the employees at the different stores because we think employee education might affect revenues and be correlated with technology adoption. If adopting the new technology attracts more educated employees, which in turn increases revenues, then that increase in revenues is a result of the technology adoption. Controlling for education would 'wipe out' this effect from our estimates. Simulating results for bad controls is beyond the scope of this document, but perhaps I will do a write up about them in the future.
+Speaking within our example, say we wanted to control for the aggregate education level of the employees at the different stores because we think employee education might affect revenues and be correlated with technology adoption. If adopting the new technology attracts more educated employees, which in turn increases revenues, then that increase in revenues is a result of the technology adoption. Controlling for education would 'wipe out' this effect from our estimates. For reasons such as this, the {did} package that Callaway and Sant'Anna created for the implementation of their estimator in R, will only use the last value before treatment of a time varying covariate if one tries to use such a covariate, rather than allowing it to change after treatment. The authors acknowledge that one could 'hack' the software to make it allow covariates' values to change after treatment, but strongly advise against it. For this reason, I will allow the software to run using the default method of only using the last value before treatment of time-varying covariates in @CALLAWAY2021200. Simulating results for bad controls is beyond the scope of this document, but perhaps I will do a write up about them in the future.
 
-As a counter-example, imagine that there is some sort of new policy that is being rolled out by some municipalities but not others. The policy hurts revenues at stores in these municipalities (maybe it is some sort of a 'sin' tax on our products, or a ban on a particularly effective form of marketing). Moreover, stores that adopt the treatment are twice as likely to be located in municipalities that implement the policy. However, the policy is not implemented *because* stores there have adopted the technology. Rather, we will imagine that there is some unobserved factor that causes an increase in the likelihoods of both technology adoption on the part of the stores and implementation of the policy on the part of munuicipalities. Last, let's assume that the stores are all (or nearly all) located in different munucipalities. If municipalities were sufficiently large and locations were sufficiently plentiful that there were treated and untreated units in every municipality, one could actually arrive at an unbiased estimate by conditioning on municipality using @CALLAWAY2021200. 
+As a counter-example, imagine that there is some sort of new policy that is being rolled out by some municipalities but not others. The policy hurts revenues at stores in these municipalities (maybe it is some sort of a 'sin' tax on our products, or a ban on a particularly effective form of marketing). Moreover, stores that adopt the treatment are twice as likely to be located in municipalities that implement the policy. However, the policy is not implemented *because* stores there have adopted the technology. Rather, we will imagine that there is some unobserved factor that causes an increase in the likelihoods of both technology adoption on the part of the stores and implementation of the policy on the part of municipalities. Last, let's assume that the stores are all (or nearly all) located in different municipalities. If municipalities were sufficiently large and locations were sufficiently plentiful that there were treated and untreated units in every municipality, one could actually arrive at an unbiased estimate by conditioning on municipality using @CALLAWAY2021200. 
 
 In this scenario, revenue is determined as follows. For each store, revenue in each year is equal to one million, minus `r scales::dollar(250000)` if a store is located in a municipality with the policy discussed above, plus the `r scales::dollar(100000)` treatment effect, plus an error term which is drawn from random normal distribution with mean zero and a standard deviation of `r scales::dollar(75000)`. The policy is introduced randomly in any of the five years or not at all. The odds that the municipality of a store that adopts the technology introduced the policy in any of the five years is 1/10, while the odds for any given year for stores that do not adopt the policy is 1/20 .    
 
@@ -626,22 +622,23 @@ output <- map_dfr(1:n_sim, get_est_4) %>% #Run sim n_sim times & rbind() outputs
 
 #Plot results w/o conditioning in policy variable
 my_event_plot(filter(output, conditioning == 0),
-              plot_title = "Estimating Effects <i>Without</i> Conidtioning on Covariates with Chaning Values")
+              plot_title = "Estimating Effects <i>Without</i> Conidtioning on Time-Varying Covariates")
 ```
 
 ``` {r with conditioning}
 #Plot results w/ conditioning in policy variable
 my_event_plot(filter(output, conditioning == 1),
-              plot_title = "Estimating Effects <i>With</i> Conidtioning on Covariates With Changing Values") 
+              plot_title = "Estimating Effects <i>With</i> Conidtioning Time-Varying Covariates") 
 
 ```
-Of course, when we do not condition on / control for the policy covariate we get biased estimates from all three methods. TWFE and Garder (2021) both allow us to control for this sort of covaraite, while @CALLAWAY2021200 does not. 
+
+Of course, when we do not condition on / control for the policy covariate we get biased estimates from all three methods. TWFE and @gardner2022two both allow us to control for this sort of covaraite, while the software does not allow for such controls within the methods of @CALLAWAY2021200. For the same reasons that @CALLAWAY2021200 advise against using time varying covariates, one must use a great degree of caution when controlling for such covariates in @gardner2022two or TWFE as well.    
 
 ## Conclusion
 
-In this document, we have explored how the TWFE, @gardner2022two, and @CALLAWAY2021200 estimators behave (or misbehave) in a variety of circumstances. First, we showed that when treatment effects are heterogeneous, TWFE will produce biased estimates, while the other two estimators can produce unbiased estimates. Next, we illustrated that if covariates exist that have constant values but still effect the dynamics of the dependent variable (ie, their effects change over time), both @gardner2022two and TWFE will produce biased estimates, while the @CALLAWAY2021200 estimator can produce unbiased estimates by conditioning on those covariates. Last, we saw that @gardner2022two and TWFE can control for covariates whose values change over time, while @CALLAWAY2021200 cannot. Of course, TWFE still requires homogeneous effects in this scenario, and truly homogeneous effects are unlikely to exist in the real world. 
+In this document, we have explored how the TWFE, @gardner2022two, and @CALLAWAY2021200 estimators behave (or misbehave) in a variety of circumstances. First, we showed that when treatment effects are heterogeneous, TWFE will produce biased estimates, while the other two estimators can produce unbiased estimates. Next, we illustrated that if covariates exist that have constant values but still effect the dynamics of the dependent variable (ie, their effects change over time) the @CALLAWAY2021200 estimator can produce unbiased estimates by conditioning on those covariates, while we need to introduce period*covariate interaction terms to control for such covariates in @gardner2022two and TWFE. Doing so may often be impractical. Last, we saw that @gardner2022two and TWFE can control for covariates whose values change over time, while the software created by the authors of @CALLAWAY2021200 prevents one from doing so within their method. Of course, TWFE still requires homogeneous effects in this scenario, as well as all others described here, and truly homogeneous effects are unlikely to exist in the real world. 
 
-Clearly, I have brushed over multiple assumptions and potential pitfalls with each of these estimators. The purpose of this was not to give a comprehensive overview of these methods, but rather to give a glimpse of some of the practical differences between them and some basic examples of scenarios in which one or two of the methods might be more appropriate than the other(s). For a more comprehensive understanding of these methods I suggest not only reading the @gardner2022two and @CALLAWAY2021200 papers, but also looking at some of the documentation for the {did} and {did2s} R packages. The vignette https://cran.r-project.org/web/packages/did/vignettes/TWFE.html, for example, gives a very approachable overview of some issues with TWFE estimators and how Callaway and Sant'Anna remedy such problems with their estimator. @butts2021did2s, provides insight into the {did2s} R package and the estimator proposed in @gardner2022two. Finally, I recommend Dr. Scott Cunningham's Substack (https://causalinf.substack.com/) for discussions about all things causal inference. 
+Clearly, I have brushed over multiple assumptions and potential pitfalls with each of these estimators. The purpose of this was not to give a comprehensive overview of these methods, but rather to give a glimpse of some of the practical differences between them and some basic examples of scenarios in which one or two of the methods might be more appropriate than the other(s). For a more comprehensive understanding of these methods I suggest not only reading the @gardner2022two and @CALLAWAY2021200 papers, but also looking at some of the documentation for the {did} and {did2s} R packages. The vignette https://cran.r-project.org/web/packages/did/vignettes/TWFE.html, for example, gives a very approachable overview of some issues with TWFE estimators and how Callaway and Sant'Anna remedy such problems with their estimator. @butts2021did2s, provides additional insight into the {did2s} R package and the estimator proposed in @gardner2022two. Professor Taylor Wright provides a recordings of some great DiD-related webinars on his youtube channel (https://www.youtube.com/playlist?list=PLVObvb_htcuBt8mV9yNagt7hK9FL5KXeE), including webinars by Dr. Pedro Sant'Anna and Dr. John Gardner.  Finally, I recommend Professor Scott Cunningham's Substack (https://causalinf.substack.com/) for discussions about all things causal inference. 
 
 I created this document independently out of my own interest. If you think it is useful, feel free to share it with others. If you think that there are flaws, feel free to reach out to me at `g.vandervinne1@gmail.com`.
 
