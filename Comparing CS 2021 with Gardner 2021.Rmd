@@ -147,7 +147,7 @@ my_event_plot <-  function(data, plot_title = "") {
                                       size = 16
               ),
             plot.caption = element_textbox_simple(margin = margin(6,0,6,0),
-                                                  size = 8,
+                                                  size = 9,
                                                   color = "grey30"),
             plot.caption.position = "plot"
             )
@@ -171,7 +171,7 @@ Recently, I have been exploring how different variations of DiD estimators that 
   #Applies to all scenarios
 n_units <- 1000 
 n_periods <- 5
-n_sim <- 10
+n_sim <- 20
 
 ```
 
@@ -484,7 +484,7 @@ my_event_plot(output,
 
 Alas, all three estimators produce biased estimates for the effect of the technology. In the language of difference-in-differences, this is because the parallel trends assumption does not hold. The 'gap' in revenues between the treatment group and the control group would not have stayed constant in the 'post' periods if the treated group had remained untreated. Because the stores that adopt the technology are disproportionately located in the USA, the treated group would have had lower revenues in 2019, which would then have caught up in 2020 before surpassing those of the untreated group in 2021 and remaining higher in 2022 and 2023. Knowing with certainty that this is the case is the beauty of the Monte Carlo simulation.  
 
-If this were a practical application, the estimates in the 'pre' periods having confidence bands that do not cross zero would give a hint that something is amiss, because this indicates that the pre-trends are not parallel. Of course, there are more formal test of pre-trends, such as that proposed in @CALLAWAY2021200, but I do not want to get too far into the weeds. It is important to note, however, the distinction between parallel *pre*-trends and the parallel trends assumption. Parallel pre-trends are neither sufficient nor necessary for difference-in-differences or TWFE estimates to be valid. However, the parallel trends assumption is necessary for these estimators to be valid. Parellel trends refers to the assumption that the paths of the dependent variable for the treated and untreated group would have remained parallel in the *post*-treatment period had the treated group remained untreated. Testing for parallel pre-trends gives us evidence that the trends between the two groups *likely* would have remained parallel in the post-treatment periods, had the treated group remained untreated. However, this is not necessarily the case. One could imagine a scenario in which the trends between the two groups were parallel and then something changed post-treatment to effect the dynamics of the outcome variable differently for the treated group versus the untreated group. The reverse is also possible. Even if pre-trends are not parallel, it is possible that the outcome paths would have been parallel in the post-period, absent treatment. 
+If this were a practical application, the estimates in the 'pre' periods not being centered on zero would give a hint that something is amiss, because this indicates that the pre-trends are not parallel. Of course, there are more formal tests of pre-trends, such as that proposed in @CALLAWAY2021200, but I do not want to get too far into the weeds. It is important to note, however, the distinction between parallel *pre*-trends and the parallel trends assumption. Parallel pre-trends are neither sufficient nor necessary for difference-in-differences or TWFE estimates to be valid. However, the parallel trends assumption is necessary for these estimators to be valid. Parallel trends refers to the assumption that the paths of the dependent variable for the treated and untreated group would have remained parallel in the *post*-treatment period had the treated group remained untreated. Testing for parallel pre-trends gives us evidence that the trends between the two groups *likely* would have remained parallel in the post-treatment periods, had the treated group remained untreated. However, this is not necessarily the case. One could imagine a scenario in which the trends between the two groups were parallel and then something changed post-treatment to effect the dynamics of the outcome variable differently for the treated group versus the untreated group. The reverse is also possible; even if pre-trends are not parallel, it is possible that the outcome paths would have been parallel in the 'post' periods, absent treatment. 
 
 Callaway and Santa'Anna (2021) provides a method for conditioning on covariates that affect outcome dynamics. Specifically, the method is the doubly robust method proposed in Sant'Anna and Zhao (2020). One aspect of this method is to use inverse probability weighting to re-weight the observations in the treatment group according their covariates. Essentially, if a unit in the control group has covariate values that are more prevalent in the treatment group, they will receive a high weight, while an observation with covaraite values similar to most other control group units, it will receive a low weight. 
 
@@ -548,7 +548,7 @@ my_event_plot(output,
 
 ```
 
-In this case, the covariate conditioning has resulted in unbiased estimates. Does this mean that Callaway and Santa'Anna have created the perfect estimator? Unfortunately not.  
+In this case, the covariate conditioning has resulted in unbiased estimates.  
 
 ### Time-Varying Covariates
 
@@ -628,7 +628,8 @@ my_event_plot(filter(output, conditioning == 0),
 ``` {r with conditioning}
 #Plot results w/ conditioning in policy variable
 my_event_plot(filter(output, conditioning == 1),
-              plot_title = "Estimating Effects <i>With</i> Conidtioning Time-Varying Covariates") 
+              plot_title = "Estimating Effects <i>With</i> Conidtioning Time-Varying Covariates*")+ 
+  labs(caption = "*The software used to implement Callaway and Sant'Anna does not allow covariates' values to change after treatment. See discussion for more.") 
 
 ```
 
