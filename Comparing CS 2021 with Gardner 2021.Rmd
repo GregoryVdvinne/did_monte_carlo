@@ -11,20 +11,6 @@ bibliography: references.bib
 ---
 
 ```{r setup, include=TRUE, message=FALSE, warning=FALSE}
-#If covariate that changes is a dummy, you could introduce dummies for policy*period_introduced and use in CS... I think. 
-  #If it is continuous, I don't think this is possible.
-  #See 45:00 in https://www.youtube.com/watch?v=VLviaylakAo
-    #Pedro Sant'Anna says you can 'hack' the software, but he doesn't want people doing it.
-  #Mention that adding covariates is a sword that cuts both ways. Introducing more increases the viability of parallel trends, but weakens the overlap condition - you start predicting treatment really well. 
-
-#Overlap condition for Gardner?
-#Check in the software uses group or unit fixed effects for Gardner?
-#https://www.youtube.com/watch?v=6mVfQkmpghY
-  #See 40:00. Says controls assume away covariate-specifc trends
-   #Says might be better to interact with time periods
-     #Still more parametric than CS
-  #43:00 discusses time-varying covariates adn even mentions CS's exclusion of them
-
 ##Setup
 
 #Clear memory
