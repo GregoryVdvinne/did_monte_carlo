@@ -155,9 +155,9 @@ Recently, I have been exploring how different variations of DiD estimators that 
 ``` {r set parameters}
 #Set number of units, periods and simulations.
   #Applies to all scenarios
-n_units <- 2000 
+n_units <- 500 
 n_periods <- 5
-n_sim <- 100
+n_sim <- 10
 
 ```
 
